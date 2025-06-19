@@ -3,12 +3,12 @@ import numpy as np
 import os
 import json
 
-ARUCO_DICT_ID = cv2.aruco.DICT_4X4_100
-BOARD_ROWS = 10
-BOARD_COLS = 7
-SQUARE_LENGTH = .02       
-MARKER_LENGTH = .015            
-MARGIN_PX = 0     
+ARUCO_DICT_ID = cv2.aruco.DICT_4X4_250
+BOARD_ROWS = 8
+BOARD_COLS = 11
+SQUARE_LENGTH = .026       
+MARKER_LENGTH = .0195           
+MARGIN_PX = 0   
 
 
 def get_calibration_parameters(img_dir):
@@ -18,11 +18,11 @@ def get_calibration_parameters(img_dir):
     #cols then rows, the wrong order caused problems earlier
     detector = cv2.aruco.CharucoDetector(board)
     
-    all_mtx = []
-    all_dist = []
+    all_corners = []
+    all_ids = []
 
     # Load images from directory
-    image_files = [os.path.join(img_dir, f) for f in os.listdir(img_dir) if f.endswith(".png")]
+    image_files = [os.path.join(img_dir, f) for f in os.listdir(img_dir) if f.endswith(".jpg")]
     
     # Loop over images and extraction of corners
     for image_file in image_files:
@@ -45,23 +45,27 @@ def get_calibration_parameters(img_dir):
 
         # Calibrate camera with extracted information
         if charucoCorners is not None and charucoIds is not None and len(charucoCorners) > 3:
-            result, mtx, dist, rvecs, tvecs = cv2.aruco.calibrateCameraCharuco([charucoCorners], [charucoIds], board, imgSize, None, None)
-            all_mtx.append(mtx)
-            all_dist.append(dist)
-            
-    return all_mtx, all_dist
+            all_corners.append(charucoCorners)
+            all_ids.append(charucoIds)
+
+    if all_ids and all_corners:
+        result, mtx, dist, rvecs, tvecs = cv2.aruco.calibrateCameraCharuco(all_corners, all_ids, board, imgSize, None, None)
+    else:
+        mtx, dst = [], []
+
+    return mtx, dist
 
 #SENSOR = 'monochrome'
 #LENS = 'kowa_f12mm_F1.8'
-OUTPUT_JSON = 'calibration.json'
+OUTPUT_JSON = 'phonecalibration.json'
 
-mtx, dist = get_calibration_parameters(img_dir='./test_images/calibration')
+mtx, dist = get_calibration_parameters(img_dir='./test_images/new_charuco_board')
 #print(mtx, dist)
-avg_mtx = np.mean(mtx, axis=0)
-avg_dist = np.mean(dist, axis=0)
-print(mtx, avg_mtx)
+# avg_mtx = np.mean(mtx, axis=0)
+# avg_dist = np.mean(dist, axis=0)
+# print(mtx, avg_mtx)
 
-data = {"mtx": avg_mtx.tolist(), "dist": avg_dist.tolist()} #"sensor": SENSOR, "lens": LENS, 
+data = {"mtx": mtx.tolist(), "dist": dist.tolist()} #"sensor": SENSOR, "lens": LENS, 
 
 with open(OUTPUT_JSON, 'w') as json_file:
     json.dump(data, json_file, indent=4)
