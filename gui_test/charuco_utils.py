@@ -2,12 +2,12 @@ import cv2
 import cv2.aruco
 import numpy as np
 
-ARUCO_DICT_ID = cv2.aruco.DICT_4X4_100
-BOARD_ROWS = 10
-BOARD_COLS = 7
-SQUARE_LENGTH = .02       
-MARKER_LENGTH = .015            
-MARGIN_PX = 0  
+ARUCO_DICT_ID = cv2.aruco.DICT_4X4_250
+BOARD_ROWS = 8
+BOARD_COLS = 11
+SQUARE_LENGTH = .026       
+MARKER_LENGTH = .0195           
+MARGIN_PX = 0   
 
 def make_charuco_board():
     # type: string -> Tuple[cv2.aruco_Dictionary, cv2.aruco_CharucoBoard]
@@ -29,24 +29,10 @@ def get_board_center(board):
     ss = board.getSquareLength()
     return 0.5 * ss * ncols, 0.5 * ss * nrows
 
-def detect_charuco_board(board, image):
+def detect_charuco_board(board, image, mtx, dst):
     """
     Find charuco corners in the image and use them to estimate board position
     """
-    
-    mtx = np.array([[526.9560652628711, 0.0, 344.97063126816704],
-    [0.0, 526.251078300014, 230.06375691685537],
-    [0.0, 0.0, 1.0]])
-
-    dst = [
-            0.1338589376347633,
-            -0.10159281004921579,
-            -0.006479941248405931,
-            0.0006662732588147609,
-            0.15194977576451532
-        ]
-    # take these in as parameters instead
-
     #image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
     detector = cv2.aruco.CharucoDetector(board)
     charucoCorners, charucoIds, marker_corners, marker_ids = detector.detectBoard(image)

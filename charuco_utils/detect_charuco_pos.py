@@ -3,7 +3,7 @@ import json
 import numpy as np
 
 
-ARUCO_DICT_ID = cv2.aruco.DICT_4X4_250
+ARUCO_DICT_ID = cv2.aruco.DICT_4X4_100
 BOARD_ROWS = 8
 BOARD_COLS = 11
 SQUARE_LENGTH = .026       
@@ -18,7 +18,7 @@ with open(json_file_path, 'r') as file: # Read the JSON file
 
 mtx = np.array(json_data['mtx'])
 dst = np.array(json_data['dist'])
-print(mtx, dst)
+print(mtx, "\n", dst)
 
 def pos_from_image(color_image):
     image = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
@@ -26,7 +26,6 @@ def pos_from_image(color_image):
     h,  w = image.shape[:2]
     newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dst, (w,h), 1, (w,h))
     image = cv2.undistort(image, mtx, dst, None, newcameramtx)
-    
 
     dictionary = cv2.aruco.getPredefinedDictionary(ARUCO_DICT_ID)
     board = cv2.aruco.CharucoBoard((BOARD_COLS, BOARD_ROWS), SQUARE_LENGTH, MARKER_LENGTH, dictionary)
@@ -34,6 +33,7 @@ def pos_from_image(color_image):
 
     # cv2.aruco.drawDetectedMarkers(image_copy, marker_corners, marker_ids)
     charucoCorners, charucoIds, marker_corners, marker_ids = detector.detectBoard(image)
+    print(len(charucoCorners), charucoIds)
     
     if charucoCorners is not None and charucoIds is not None and len(charucoCorners) > 3:
         print("entered conditional")
@@ -52,6 +52,7 @@ def pos_from_image(color_image):
 def single_image(filepath):
     image = cv2.imread(filepath)
     image = cv2.resize(image, None, None, fx = .25, fy = .25)
+    print(image.shape)
     tv, rv, result = pos_from_image(image)
     cv2.imwrite("test_images/charucodetections.jpg", result)
     print(tv, "\n", rv)

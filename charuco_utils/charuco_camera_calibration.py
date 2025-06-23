@@ -26,9 +26,10 @@ def get_calibration_parameters(img_dir):
     
     # Loop over images and extraction of corners
     for image_file in image_files:
-        print(image_file)
+        #print(image_file)
         image = cv2.imread(image_file)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        image = cv2.resize(image, None, None, fx = .25, fy = .25)
         imgSize = image.shape
         
         #image_copy = image.copy()

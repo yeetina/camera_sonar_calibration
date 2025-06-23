@@ -3,6 +3,7 @@ import sys
 import os
 import cycler
 import pickle
+import tensorflow as tf
 import numpy as np
 from PyQt5 import QtGui, QtWidgets, QtCore
 
@@ -99,14 +100,22 @@ class SensorWindow(QtWidgets.QMainWindow):
     def __init__(self, outdir):
         super(SensorWindow, self).__init__()
         self.outdir = outdir
-        self.sonar_params = {"range": 10.000000, "gain": 47.000000} #got from txt file
 
         self._main = QtWidgets.QWidget()
         self.setCentralWidget(self._main)
 
         self.setup_layout()
         self.setup_data()
-        self.initialize_camera()
+
+        phone_mtx = np.array([[942.6847133455641, 0.0, 229.60291730101702],
+                            [0.0, 4077.110071945852, 1408.7761995830372],
+                            [0.0, 0.0, 1.0]])
+        phone_dst = np.array([[-1.1701606614778872,
+                    2.27606959770457,
+                    -0.016377618529930534,
+                    0.10323614752890109,
+                    -2.4914094424655855]])
+        self.initialize_camera(phone_mtx, phone_dst)
 
         (self.aruco_dict, self.charuco_board, self.sonar_coords) = isc.init_charuco_sonar()
 
@@ -117,9 +126,12 @@ class SensorWindow(QtWidgets.QMainWindow):
         self.plot_charuco_target(self.charuco_board, self.sonar_coords)
 
     def setup_data(self):
-        self.paired_data = isc.SensorData()
-        self.current_timestamp = "0000"
-        # perhaps get sonar params here?
+        self.paired_data = isc.SensorData() #accept params here?
+        self.sonar_params = self.paired_data.sonar_params
+        self.current_timestamp = ""
+        self.range_m = self.sonar_params.range
+
+        self.polar_transform = isc.create_transform_map(self.sonar_params)
 
         #[os.path.join(img_dir, f) for f in os.listdir(img_dir)]
         (self.good_timestamps, self.skip_timestamps, self.sonar_labels) = self.load_state()
@@ -472,9 +484,9 @@ class SensorWindow(QtWidgets.QMainWindow):
         for label, coord in sonar_coords.items():
             xx, yy = coord
             x = xx * scale
-            # coordinate system conversion: board's origin is lower-left,
+            # coordinate system conversion: board's origin is lower-left, <-I corrected this in init_charuco_sonar
             # but image's is upper-left.
-            y = ypixels - yy * scale
+            y = yy * scale
             self.target_ax.text(
                 x,
                 y,
@@ -533,9 +545,7 @@ class SensorWindow(QtWidgets.QMainWindow):
 
         self.charuco_annotated_camera_canvas.draw()
 
-    def plot_camera_targets_from_sonar(
-        self, camera_data, camera_info, cs_rot, cs_trans
-    ):
+    def plot_camera_targets_from_sonar(self, camera_data, camera_info, cs_rot, cs_trans):
         """
         Update the figure that shows the position of the labeled sonar
         targets superimposed on the camera data, using the calculated
@@ -551,46 +561,50 @@ class SensorWindow(QtWidgets.QMainWindow):
         self.camera_annotated_sonar_ax.imshow(camera_data, cmap="gray")
 
         # color_cycler = cycler.cycler(color=matplotlib.cm.inferno(np.linspace(0,1,10)))
-        color_cycler = cycler.cycler(color=matplotlib.cm.viridis(np.linspace(0, 1, 10)))
+        color_cycler = cycler.cycler(color=matplotlib.cm.plasma(np.linspace(0, 1, 10)))
         my_cycler = color_cycler()
 
         if self.current_timestamp in self.sonar_labels:
             points = self.sonar_labels[self.current_timestamp]
             for label, coord in points.items():
-                #Label, (x,y)
-                xpixel, ypixel = coord
-                #for old sonar/camera dataset, origin is (512, 507)
-                azi_rad, rr = isc.get_polar_coords(xpixel, ypixel, 512, 507)
-                #azi_rad = np.radians(azi_deg)
-                elev_rads = np.arange(np.radians(-15.0), np.radians(15.0), np.radians(0.25))
+                azi_deg, rr = isc.pixel_to_polar(coord, self.sonar_params) #convert from pixels to real units
+                azi_rad = np.radians(azi_deg)
+                elev_rads = np.arange(np.radians(-10.0), np.radians(10.0), np.radians(0.25)) #change back to .25
                 label_color = next(my_cycler)["color"]
+
+                #print("theta, rr, color: ", azi_deg, rr, label_color)
                 for elev_rad in elev_rads:
                     # X is forward
                     zz = rr * np.sin(elev_rad)
                     xx = rr * np.cos(elev_rad) * np.cos(azi_rad)
                     yy = rr * np.cos(elev_rad) * np.sin(azi_rad)
                     sonar_point = np.reshape([xx, yy, zz], (3, 1))
+                    
                     # cs_{trans, rot} give transformation from camera to sonar frame
                     # We need the opposite here ...
                     camera_coord = np.transpose(cs_rot) @ (sonar_point - cs_trans)
-
-                    camera_matrix = np.reshape(camera_info.K, (3, 3))
+                    #print(f'sonar: {sonar_point},\ncamera: {camera_coord}') #these seem reasonable
+                    
                     image_coord, _ = cv2.projectPoints(
                         camera_coord,
                         0 * cs_trans,
                         0 * cs_trans,
-                        camera_matrix,
+                        camera_info.K,
                         camera_info.D,
-                    )
+                        )
+                    
                     ix, iy = image_coord[0][0]
+                    ix, iy = int(ix), int(iy)
+                    #print("camera sonar", camera_coord, ix, iy, "r ", rr)
                     # don't plot points outside the FOV
-                    nrows, ncols = camera_data.shape
+                    nrows, ncols = camera_data.shape[:2]
                     if ix >= 0 and ix < ncols and iy >= 0 and iy < nrows:
                         self.camera_annotated_sonar_ax.plot(
-                            ix, iy, ".", ms=1, color=label_color
+                            ix, iy, marker=".", ms=2, color=label_color
                         )
 
                 # Intentionally plot the label for the last point drawn
+                print("last point", ix, iy)
                 self.camera_annotated_sonar_ax.text(ix, iy, label, color=label_color)
 
         self.camera_annotated_sonar_canvas.draw()
@@ -609,7 +623,7 @@ class SensorWindow(QtWidgets.QMainWindow):
 
         if rvec is not None:
             rot, _ = cv2.Rodrigues(rvec)
-            camera_matrix = np.reshape(camera_info.K, (3, 3))
+            #camera_matrix = np.reshape(camera_info.K, (3, 3))
             pose_text = (
                 "Camera -> Target: \n"
                 "rvec = [{:.2f}, {:.2f}, {:.2f}] \n"
@@ -638,12 +652,15 @@ class SensorWindow(QtWidgets.QMainWindow):
                 # project only corrects for distortion
                 world_coord = tvec + rot @ target_point
                 image_coord, _ = cv2.projectPoints(
-                    world_coord, 0 * rvec, 0 * tvec, camera_matrix, camera_info.D
+                    world_coord, 0 * rvec, 0 * tvec, camera_info.K, camera_info.D
                 )
                 xx, yy = image_coord[0][0]
+                
                 # don't plot points outside the FOV
                 nrows, ncols = camera_data.shape
+                #print(nrows, ncols, xx, yy)
                 if xx >= 0 and xx < ncols and yy >= 0 and yy < nrows:
+                    y = nrows - yy
                     self.camera_annotated_camera_ax.plot(xx, yy, "r.")
                     # Removed because too noisy in GUI -- only useful on saved images.
                     # self.camera_annotated_camera_ax.text(xx, yy, label, color='black')
@@ -652,7 +669,7 @@ class SensorWindow(QtWidgets.QMainWindow):
 
         self.camera_annotated_camera_canvas.draw()
 
-    def plot_sonar_image(self, data, keep_limits):
+    def plot_sonar_image(self, data, rvec, tvec, extent, keep_limits):
         """
         removed params extent, rvec, tvec
         Plot sonar image in rectangular plot.
@@ -674,28 +691,29 @@ class SensorWindow(QtWidgets.QMainWindow):
         # Plot the human-provided labels
         if self.current_timestamp in self.sonar_labels:
             points = self.sonar_labels[self.current_timestamp]
-            for _label, coord in points.items():
+            for label, coord in points.items():
                 theta_deg, rr = coord
                 self.sonar_image_ax.plot(
                     theta_deg, rr, scalex=False, marker="o", ms=8, c="white", fillstyle="none"
                 )
+                self.sonar_image_ax.text(theta_deg+1, rr+2, label, c="white", fontsize=8)
 
-        # # Plot the projected location of the targets
-        # if rvec is not None:
-        #     rot, _ = cv2.Rodrigues(rvec)
-        #     # Project points in the charuco board's coordinate frame
-        #     for label, (cx, cy) in self.sonar_coords.items():
-        #         target_point = np.reshape([cx, cy, 0], (3, 1))
-        #         pt_sf = tvec + rot @ target_point  # sonar instrument frame
-        #         pt_if = isc.image_from_sonar3d(pt_sf)  # sonar image frame
-        #         th_deg = np.degrees(pt_if[0])
-        #         rr = pt_if[1]
-        #         min_th, max_th, min_range, max_range = extent
-        #         theta_in_range = (th_deg >= min_th) and (th_deg <= max_th)
-        #         range_in_range = (rr >= min_range) and (rr <= max_range)
-        #         if theta_in_range and range_in_range:
-        #             self.sonar_image_ax.plot(th_deg, rr, "g.", markersize=4)
-        #             self.sonar_image_ax.text(th_deg, rr, label, c="white", fontsize=6)
+        # Plot the projected location of the targets
+        if rvec is not None:
+            rot, _ = cv2.Rodrigues(rvec)
+            # Project points in the charuco board's coordinate frame
+            for label, (cx, cy) in self.sonar_coords.items():
+                target_point = np.reshape([cx, cy, 0], (3, 1))
+                pt_sf = tvec + rot @ target_point  # sonar instrument frame
+                pt_if = isc.image_from_sonar3d(pt_sf)  # sonar image frame
+                th_deg = np.degrees(pt_if[0])
+                rr = pt_if[1]
+                min_th, max_th, min_range, max_range = extent
+                theta_in_range = (th_deg >= min_th) and (th_deg <= max_th)
+                range_in_range = (rr >= min_range) and (rr <= max_range)
+                if theta_in_range and range_in_range:
+                    self.sonar_image_ax.plot(th_deg, rr, "g.", markersize=4)
+                    self.sonar_image_ax.text(th_deg, rr, label, c="white", fontsize=6)
 
         if keep_limits:
             self.sonar_image_ax.set_xlim(xlim)
@@ -713,7 +731,8 @@ class SensorWindow(QtWidgets.QMainWindow):
         Actually plotting data, angles need to be in radians.
         """
         self.polar_sonar_ax.cla()
-        self.polar_sonar_ax.imshow(self.sonar_image[:, 57:968], cmap="inferno")
+        self.polar_sonar_ax.imshow(self.sonar_image, cmap="inferno")
+        self.polar_sonar_canvas.draw()
 
 
 #plot_sonar_targets_from_camera
@@ -754,9 +773,10 @@ class SensorWindow(QtWidgets.QMainWindow):
 #handle_next10_button
     def handle_good_button(self):
         self.good_timestamps.add(self.current_timestamp)
+        time_str = isc.timestamp_tostr(self.current_timestamp)
         # NB: using the _camera's_ timestamp for both of 'em, for easier playback.
-        camera_filename = "{}/{}_camera.jpg".format(self.outdir, self.current_timestamp)
-        sonar_filename = "{}/{}_sonar.jpg".format(self.outdir, self.current_timestamp)
+        camera_filename = "{}/{}_camera.jpg".format(self.outdir, time_str)
+        sonar_filename = "{}/{}_sonar.jpg".format(self.outdir, time_str)
         print("Trying to save data to {}".format(camera_filename))
         if not os.path.exists(camera_filename):
             cv2.imwrite(camera_filename, self.camera_data)
@@ -781,8 +801,9 @@ class SensorWindow(QtWidgets.QMainWindow):
         self.update_good_label()
 
     def load_from_timestamp(self, timestamp):
-        camera_filename = "{}/{}_camera.jpg".format(self.outdir, timestamp)
-        sonar_filename = "{}/{}_sonar.jpg".format(self.outdir, timestamp)
+        time_str = isc.timestamp_tostr(timestamp)
+        camera_filename = "{}/{}_camera.jpg".format(self.outdir, time_str)
+        sonar_filename = "{}/{}_sonar.jpg".format(self.outdir, time_str)
 
         try:
             self.camera_data = cv2.imread(camera_filename)
@@ -844,10 +865,10 @@ class SensorWindow(QtWidgets.QMainWindow):
         self.handle_next_button()
 
 #handle_print_button
-#handle_remove_label_button
     def handle_remove_label_button(self):
         dialog = EnterPointDialog(self.remove_point)
-        target_filename = "{}/{}_target.png".format(self.outdir, self.current_timestamp)
+        time_str = isc.timestamp_tostr(self.current_timestamp)
+        target_filename = "{}/{}_target.png".format(self.outdir, time_str)
         self.target_fig.savefig(target_filename)
         dialog.exec_()
 
@@ -858,6 +879,8 @@ class SensorWindow(QtWidgets.QMainWindow):
             # the key, but we only want to redraw if necessary.
             if label in self.sonar_labels[self.current_timestamp]:
                 self.sonar_labels[self.current_timestamp].pop(label, None)
+                if len(self.sonar_labels[self.current_timestamp]) == 0:
+                    del self.sonar_labels[self.current_timestamp]
                 self.save_state()
                 self.update_plots(keep_limits=False)
     
@@ -911,7 +934,7 @@ class SensorWindow(QtWidgets.QMainWindow):
     def get_plottable_sonar(self):
         # type: None -> (np.ndarray, List]
         """
-        I'm not actually using this
+        This doesn't really need to be a separate function
         Reshape the most recent sonar image into the right format to
         sent to plt.imshow, and determine the appropriate extent.
 
@@ -936,11 +959,74 @@ class SensorWindow(QtWidgets.QMainWindow):
         #     self.sonar_image.ranges[0],
         #     self.sonar_image.ranges[-1],
         # ]
-        sonar_matrix = isc.raw_sonar_to_rectangular(self.sonar_image, 2.0, wide=True)
+        #sonar_matrix = isc.raw_sonar_to_rectangular(self.sonar_image, 2.0, wide=True)
+        sonar_matrix = cv2.remap(self.sonar_image, *self.polar_transform, cv2.INTER_LINEAR)
         azimuth_min, azimuth_max = -65, 65
         extent_degrees = [azimuth_min, azimuth_max, 0.0, 2.0]
         return sonar_matrix, extent_degrees
-#calibrate_sonar
+
+    def calibrate_sonar(self, camera_rvec, camera_tvec):
+        # type: None
+        """
+        I've found that its more stable to direcly solve for the camera->sonar
+        transformation than to try to solve for the sonar->board transform
+        and then chain them. I think this is because we can start the former
+        optimization with a much better prior, so it's likely to land in the
+        correct local minimum.
+
+        I've also found it more stable if we first solve for the translation,
+        holding rotation constant, and then solve for the full pose.
+
+        * sonar_points: locations of the detected points in the sonar frame
+        * cs_rvec: rotation to align
+        * cs_tvec: vector from camera frame to sonar frame
+
+        """
+        have_labels = self.current_timestamp in self.sonar_labels
+        have_camera = camera_rvec is not None
+        if not have_labels or not have_camera:
+            return None, None, None, None, None, None
+
+        labeled_points = self.sonar_labels[self.current_timestamp]
+        sonar_points, target_points = isc.get_sonar_target_correspondences(labeled_points, self.sonar_params)
+        # Now these are correct
+
+        # Transform from target's coordinate frame to camera coordinate frame
+        camera_rot, _ = cv2.Rodrigues(camera_rvec)
+        camera_points = camera_tvec + camera_rot @ target_points
+
+        range_resolution, angle_resolution = self.sonar_params.r_res, self.sonar_params.th_res
+        #isc.get_sonar_resolution(self.sonar_image)
+
+        # TODO: These initial vectors should become input params!
+        init_rvec = (1.2092, 1.2092, 1.2092)
+        init_tvec = (0, -0.06, 0.095)  # I think this is from the CAD drawing
+
+        cs_err, cs_rvec, cs_tvec = isc.calibrate_sonar(
+            sonar_points,
+            camera_points,
+            range_resolution,
+            angle_resolution,
+            init_rvec,
+            init_tvec,
+        )
+
+        cs_rot, _ = cv2.Rodrigues(cs_rvec)
+        #yaw, pitch, roll = tf.transformations.euler_from_matrix(np.transpose(cs_rot))
+        #tf.geometry.transformation.euler.from_rotation_matrix(np.transpose(cs_rot))
+        dx, dy, dz = cs_tvec[0][0], cs_tvec[1][0], cs_tvec[2][0]
+        print("Final ROS XYZ: {:03f} {:03f} {:03f}".format(dx, dy, dz))
+        #print("Final ROS YPR: {:03f} {:03f} {:03f}".format(yaw, pitch, roll))
+        print()
+
+        # TODO: Calculate sonar-> target from camera->sonar and camera->target
+        camera_rot, _ = cv2.Rodrigues(camera_rvec)
+        sonar_tvec = cs_tvec + cs_rot @ camera_tvec
+        sonar_rot = cs_rot @ camera_rot
+        sonar_rvec, _ = cv2.Rodrigues(sonar_rot)
+
+        return sonar_points, target_points, cs_rvec, cs_tvec, sonar_rvec, sonar_tvec
+
 
 #good below here
     def update_plots(self, keep_limits=True):
@@ -950,7 +1036,8 @@ class SensorWindow(QtWidgets.QMainWindow):
         )
 
         self.update_good_label()
-        charucoCorners, charucoIds, camera_tvec, camera_rvec = charuco_utils.detect_charuco_board(self.charuco_board, self.camera_data)
+        charucoCorners, charucoIds, camera_tvec, camera_rvec = charuco_utils.detect_charuco_board(
+                        self.charuco_board, self.camera_data, self.camera_info.K, self.camera_info.D)
         
         # Save these! The current timestamp is actually the SONAR's header
         # stamp, but that's what we're using to index into the sensor pairs.
@@ -965,15 +1052,14 @@ class SensorWindow(QtWidgets.QMainWindow):
         self.plot_camera_targets_from_camera(camera_gray, self.camera_info, camera_rvec, camera_tvec)
 
         sonar_matrix, extent_degrees = self.get_plottable_sonar()
+        sonar_matrix = cv2.flip(sonar_matrix, 0)
 
-        # cc = self.calibrate_sonar(camera_rvec, camera_tvec)
-        # sonar_points, target_points, cs_rvec, cs_tvec, sonar_rvec, sonar_tvec = cc
+        cc = self.calibrate_sonar(camera_rvec, camera_tvec)
+        sonar_points, target_points, cs_rvec, cs_tvec, sonar_rvec, sonar_tvec = cc
+        
 
         self.sonar_image_ax.imshow(self.sonar_image)
-        self.plot_sonar_image(
-            sonar_matrix,
-            keep_limits=keep_limits,
-        )
+        self.plot_sonar_image(sonar_matrix, None, None, extent_degrees, keep_limits=keep_limits)
         self.plot_polar_sonar_image(sonar_matrix)
         # if sonar_rvec is not None:
         #     rres, ares = isc.get_sonar_resolution(self.sonar_image)
@@ -983,13 +1069,11 @@ class SensorWindow(QtWidgets.QMainWindow):
         # else:
         #     sonar_err = -1.0
 
-        # if cs_rvec is None:
-        #     cs_rotation = None
-        # else:
-        #     cs_rotation, _ = cv2.Rodrigues(cs_rvec)
-        # self.plot_camera_targets_from_sonar(
-        #     self.camera_data, self.camera_info, cs_rotation, cs_tvec
-        # )
+        if cs_rvec is None:
+            cs_rotation = None
+        else:
+            cs_rotation, _ = cv2.Rodrigues(cs_rvec)
+        self.plot_camera_targets_from_sonar(camera_gray, self.camera_info, cs_rotation, cs_tvec)
 
         # self.plot_sonar_targets_from_camera(
         #     sonar_matrix, sonar_rvec, sonar_tvec, camera_rvec, camera_tvec, sonar_err
@@ -1050,7 +1134,7 @@ if __name__ == "__main__":
     #     "name of file to save manually generated labels. If file "
     #     "already exists, will resume from previous session"
     # )
-    outdir = "C:/Users/corri/OneDrive/Documents/SonarExperimentData/myresults"
+    outdir = "C:/Users/corri/OneDrive/Documents/SonarExperimentData/testpairs/output"
     try:
         if not os.path.exists(outdir):
             os.makedirs(outdir)

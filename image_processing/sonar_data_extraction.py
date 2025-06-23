@@ -3,7 +3,7 @@ import numpy as np
 import time
 
 
-colorim = cv2.imread("C:/Users/corri/OneDrive/Documents/SonarExperimentData/oculus_sonar_jun_17/Oculus_20250618_103326.jpg")
+colorim = cv2.imread("C:/Users/corri/OneDrive/Documents/SonarExperimentData/testpairs/sonar/Oculus_20250619_163741.jpg")
 sonar_im = cv2.cvtColor(colorim.copy(), cv2.COLOR_RGB2GRAY)
 # print(sonar_im.shape)
 #cropped = sonar_im[50:942, 620:1232]
@@ -38,7 +38,7 @@ def crop_sonar_arc(image, wide=False):
     cv2.ellipse(mask, centerpoint, (892, 892), 0.0, angle_start, angle_end, (255), -1)
     return cv2.bitwise_and(cropped, cropped, mask=mask)
 
-masked = crop_sonar_arc(colorim)
+masked = crop_sonar_arc(colorim, True)
 
 def get_polar_coords(pixelx, pixely, originx, originy):
     rad = np.sqrt((pixely-originy)**2 + (pixelx-originx)**2)
@@ -47,6 +47,50 @@ def get_polar_coords(pixelx, pixely, originx, originy):
     except:
         theta = 0
     return rad, theta
+
+def create_transform_map(range_m, wide = False):
+    if range_m >= 1.5:
+        r_res = .0025
+    else:
+        r_res = .002
+
+    if wide:
+        aper = 130
+        th_res = 0.6
+        theta_bins = 216 #(aper/th_res)
+        range_bins = int(range_m/r_res) 
+        x_center = 808
+    else:
+        aper = 40
+        th_res = 0.4
+        theta_bins = int(aper/th_res) #columns
+        range_bins = int(range_m/r_res)
+        x_center = 305
+    
+    polar_map = [[(0, 0)]*theta_bins] * range_bins
+    x_map = np.zeros((range_bins, theta_bins), dtype=np.float32)
+    y_map = np.zeros((range_bins, theta_bins), dtype=np.float32)
+    
+    #np.zeros((range_bins, theta_bins), dtype=cv2.CV_32FC2)
+        #x is thetabin, y is rangebin
+    for y in range(range_bins):
+        for x in range(theta_bins):
+            theta_rad = (x*th_res - aper/2) * np.pi/180
+            r_pix = (range_bins-y-1) * r_res * 892/range_m
+            dx = r_pix*np.sin(theta_rad)
+            dy = r_pix*np.cos(theta_rad)
+            #print(x, y, dx, dy)
+            xfinal = x_center + dx
+            yfinal = 892-dy
+            x_map[y][x] = xfinal
+            y_map[y][x] = yfinal
+
+    outmap = np.array(polar_map).astype(np.float32)
+    return x_map, y_map
+
+xmap, ymap = create_transform_map(2, True)
+outim = cv2.remap(masked, xmap, ymap, cv2.INTER_LINEAR)
+
 # options: unordered list of range, theta points or preallocate array based on resolutions
 # .4 degree resolution, 40 degree total, maybe 2.5mm range resolution, range of 1.5m
 # theta_bins = 100 #columns
@@ -137,6 +181,7 @@ def raw_sonar_to_rectangular(image, range_m, wide=False):
     return cv2.flip(rectangular,-1)
 
 rectangular = raw_sonar_to_rectangular(colorim, 2.0, wide=True)
+
 # ARUCO_DICT_ID = cv2.aruco.DICT_4X4_250
 # BOARD_ROWS = 8
 # BOARD_COLS = 11
@@ -157,12 +202,13 @@ rectangular = raw_sonar_to_rectangular(colorim, 2.0, wide=True)
 
 while True:
     # show the image
-    cv2.imshow("Output", rectangular)
+    sidebyside = cv2.hconcat([outim, rectangular])
+    cv2.imshow("Output", sidebyside)
     cv2.waitKey(3)
                 
     #press q to quit
     if cv2.waitKey(1) & 0xFF == ord('q'):
-        cv2.imwrite("test_images/rectangular_wide.png", rectangular)
+        cv2.imwrite("test_images/mapcomparison.png", sidebyside)
         break
 
 cv2.destroyAllWindows()
