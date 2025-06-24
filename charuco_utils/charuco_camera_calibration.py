@@ -28,19 +28,20 @@ def get_calibration_parameters(img_dir):
     for image_file in image_files:
         #print(image_file)
         image = cv2.imread(image_file)
+        image_copy = image.copy()
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        image = cv2.resize(image, None, None, fx = .25, fy = .25)
+        #image = cv2.resize(image, None, None, fx = .25, fy = .25)
         imgSize = image.shape
         
-        #image_copy = image.copy()
+        
         charucoCorners, charucoIds, marker_corners, marker_ids = detector.detectBoard(image)
         
         # for mark in marker_corners:
         #     x, y = mark[0][0]
         #     cv2.circle(image_copy, (int(x), int(y)), 4, (0, 255, 0), -1)
 
-        #cv2.aruco.drawDetectedMarkers(image_copy, marker_corners, marker_ids)
-        #cv2.imwrite("test_images/points.jpg", image_copy)
+        cv2.aruco.drawDetectedMarkers(image_copy, marker_corners, marker_ids, borderColor=(255, 0, 0))
+        cv2.imwrite("test_images/points.jpg", image_copy)
 
         #print(charucoCorners, marker_corners)
 

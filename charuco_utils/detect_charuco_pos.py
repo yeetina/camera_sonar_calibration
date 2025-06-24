@@ -3,7 +3,7 @@ import json
 import numpy as np
 
 
-ARUCO_DICT_ID = cv2.aruco.DICT_4X4_100
+ARUCO_DICT_ID = cv2.aruco.DICT_4X4_250
 BOARD_ROWS = 8
 BOARD_COLS = 11
 SQUARE_LENGTH = .026       
@@ -24,8 +24,8 @@ def pos_from_image(color_image):
     image = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
 
     h,  w = image.shape[:2]
-    newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dst, (w,h), 1, (w,h))
-    image = cv2.undistort(image, mtx, dst, None, newcameramtx)
+    # newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dst, (w,h), 1, (w,h))
+    # image = cv2.undistort(image, mtx, dst, None, newcameramtx)
 
     dictionary = cv2.aruco.getPredefinedDictionary(ARUCO_DICT_ID)
     board = cv2.aruco.CharucoBoard((BOARD_COLS, BOARD_ROWS), SQUARE_LENGTH, MARKER_LENGTH, dictionary)
@@ -33,17 +33,14 @@ def pos_from_image(color_image):
 
     # cv2.aruco.drawDetectedMarkers(image_copy, marker_corners, marker_ids)
     charucoCorners, charucoIds, marker_corners, marker_ids = detector.detectBoard(image)
-    print(len(charucoCorners), charucoIds)
     
     if charucoCorners is not None and charucoIds is not None and len(charucoCorners) > 3:
         print("entered conditional")
         retval, rvec, tvec = cv2.aruco.estimatePoseCharucoBoard(np.array(charucoCorners), np.array(charucoIds), board, np.array(mtx), np.array(dst), np.empty(1), np.empty(1))
         result = color_image.copy()
-        cv2.drawFrameAxes(result, np.array(mtx), np.array(dst), rvec, tvec, .1)
-        cv2.drawChessboardCorners(result, (BOARD_COLS, BOARD_ROWS), charucoCorners, retval)
-        
-        # Zx, Zy, Zz = tvec[0][0], tvec[1][0], tvec[2][0]
-        # fx, fy = mtx[0][0], mtx[1][1]
+        cv2.aruco.drawDetectedMarkers(result, marker_corners, marker_ids)
+        #cv2.drawFrameAxes(result, np.array(mtx), np.array(dst), rvec, tvec, .1)
+        #cv2.drawChessboardCorners(result, (BOARD_COLS, BOARD_ROWS), charucoCorners, retval)
 
         return tvec, rvec, result
     else:
@@ -51,8 +48,7 @@ def pos_from_image(color_image):
 
 def single_image(filepath):
     image = cv2.imread(filepath)
-    image = cv2.resize(image, None, None, fx = .25, fy = .25)
-    print(image.shape)
+    #image = cv2.resize(image, None, None, fx = .25, fy = .25)
     tv, rv, result = pos_from_image(image)
     cv2.imwrite("test_images/charucodetections.jpg", result)
     print(tv, "\n", rv)
@@ -73,7 +69,7 @@ def video_stream():
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
-test_path = 'test_images/new_charuco_board/20250619_140320.jpg'
+test_path = "C:/Users/corri/OneDrive/Documents/SonarExperimentData/testpairs/camera/20250619_163729.jpg"
 single_image(test_path)
 # rvec = np.array([-0.24193354, -0.06892308, -0.10476409])
 # dst, jac = cv2.Rodrigues(rvec)

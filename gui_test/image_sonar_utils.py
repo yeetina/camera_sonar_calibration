@@ -9,17 +9,16 @@ import matplotlib.pyplot as plt
 import charuco_utils
 
 class SensorData():
-    def __init__(self):
-        folder = "C:/Users/corri/OneDrive/Documents/SonarExperimentData/testpairs"
-        self.camera_folder = f'{folder}/camera'
-        self.sonar_folder = f'{folder}/sonar'
-        self.sonar_params = SonarInfo(1.6, True)
+    def __init__(self, main_folder, sonar):
+        self.camera_folder = f'{main_folder}/camera'
+        self.sonar_folder = f'{main_folder}/sonar'
+        self.sonar_params = sonar
         self.current_index = None
         self.sorted_pairs = []
 
         image_file_names = {f for f in os.listdir(self.camera_folder)}
         sonar_file_names = {f for f in os.listdir(self.sonar_folder)}
-        sonar_sorted = sorted(list(sonar_file_names)) #key=lambda x: self.sort_key(x)
+        sonar_sorted = sorted(list(sonar_file_names)) 
         camera_sorted = sorted(list(image_file_names))
         
         for sname, cname in zip(sonar_sorted, camera_sorted):
@@ -29,13 +28,7 @@ class SensorData():
             self.sorted_pairs.append(SensorPair(sname, cname, timestamp))
         
         self.length = len(self.sorted_pairs)
-        print("Data structure created successfully")   
-        # for i, name in enumerate(sonar_sorted):
-        #     s_idx, c_idx = self.sort_key(name)
-        #     cam_name = f"c{c_idx}s{s_idx}.jpg"
-        #     if cam_name in image_file_names:
-        #         timestamp = i
-        #         self.sorted_pairs.append(SensorPair(name, cam_name, timestamp))
+        print("Data structure created successfully")
  
         
     def get_pair(self, idx):
@@ -43,7 +36,7 @@ class SensorData():
         sonar = cv2.imread(f"{self.sonar_folder}/{current_pair.sonarfile}", cv2.IMREAD_GRAYSCALE)
         sonar = crop_sonar_arc(sonar, self.sonar_params)
         image = cv2.imread(f"{self.camera_folder}/{current_pair.imagefile}")
-        image = cv2.resize(image, None, None, fx = .25, fy = .25)
+        #image = cv2.resize(image, None, None, fx = .25, fy = .25)
         return current_pair, sonar, image
 
     def next(self):
@@ -57,16 +50,6 @@ class SensorData():
             return self.get_pair(self.current_index)
         else:
             raise Exception("No data to display")
-        
-    def next_good(self):
-        idx = self.current_index
-        print(self.current_index)
-        while idx < self.length:
-            pair = self.sorted_pairs[idx]
-            if pair.get_flag() == "good":
-                return idx
-            idx += 1
-        print(self.current_index)
 
     def go_to(self, index):
         self.current_index = index
@@ -82,21 +65,6 @@ class SensorPair():
         self.imagefile = imagefile
         self.flag = None
         self.timestamp = ID
-
-    def sort_key(self):
-        """
-        Returns a value that will be used to sort sensor pairs.
-        This function should be customized for the naming convention used
-        """
-        one, two = self.sonarfile.split("c")
-        #print(name, one[1:],two[:-4])
-        return int(one[1:]), int(two[:-4])
-    
-    def get_flag(self):
-        return self.flag
-    
-    def set_flag(self, value):
-        self.flag = value
     
     def get_timestamp(self):
         return self.timestamp
@@ -153,7 +121,6 @@ def create_transform_map(sonar):
     range_bins = sonar.range_bins
     x_center = sonar.x_center
     
-    
     x_map = np.zeros((range_bins, theta_bins), dtype=np.float32)
     y_map = np.zeros((range_bins, theta_bins), dtype=np.float32)
     
@@ -171,59 +138,6 @@ def create_transform_map(sonar):
             y_map[y][x] = yfinal
 
     return x_map, y_map
-
-def raw_sonar_to_rectangular(masked, range_m, wide=False):
-    #masked = crop_sonar_arc(image, wide)
-    #masked = image[:, 57:968]
-    #cv2.imwrite("test_images/otherwidemask.png", masked)
-
-    #if range is greater than 1.5m, use lower range resolution
-    if range_m >= 1.5:
-        r_res = .0025
-    else:
-        r_res = .002
-
-    if wide:
-        aper = 130
-        th_res = 0.6
-        theta_bins = 216 #(aper/th_res)
-        range_bins = int(range_m/r_res) #or 2.5
-        x_center = 808
-        #x_center = 455
-    else:
-        aper = 40
-        th_res = 0.4
-        theta_bins = int(aper/th_res) #columns
-        range_bins = int(range_m/r_res)
-        x_center = 305
-    
-    #print(range_bins, theta_bins)
-    rectangular = np.zeros((range_bins, theta_bins), dtype="uint8")
-    height, width = masked.shape
-    # remove this  ^ later ***
-    #test_points = [(201,186),(578,93),(356,406),(588,336)]
-
-    #print(width, height)
-    for y in range(height):
-        for x in range(width):
-            if masked[y][x] != 0: 
-                r, th = get_polar_coords(x, y, x_center, 892) #507***
-                rscale = range_bins/892 #507***
-                tscale = theta_bins/aper
-                th = (th * 180/np.pi) + (aper/2)
-                r *= rscale
-                th *= tscale
-
-                row = min(np.floor(r), range_bins-1)
-                col = min(np.floor(th), theta_bins-1)
-                row = max(row, 0)
-                col = max(col,0)
-                # if (x, y) in test_points:
-                #     print((x, y), int(row), int(col))
-                
-                rectangular[int(row)][int(col)] = masked[y][x]
-    # cv2.imwrite("test_images/otherrectangular.png", rectangular)
-    return rectangular #cv2.flip(rectangular,-1)***
 
 def get_polar_coords(pixelx, pixely, originx, originy):
     """Radius is in pixels and theta is in radians
@@ -244,19 +158,37 @@ def pixel_to_polar(coord, sonar):
     r_meters = (ypix) * sonar.r_res
     return theta_deg, r_meters
 
-# img = cv2.imread("C:/Users/corri/OneDrive/Documents/SonarExperimentData/09-03-2022/09-03-2022/2022-03-09_15-38-06rec20/sonar/s5c220.jpg")
-# raw_sonar_to_rectangular(img, 2.0, wide = True)
-# pts1 = np.float32([[578,93],[201,186],[588,336],[356,406]])
-# pts2 = np.float32([[80,681],[171,645],[45,341],[223,181]])
- 
-# M = cv2.getPerspectiveTransform(pts1,pts2)
- 
-# dst = cv2.warpPerspective(img,M,(216,800))
- 
-# plt.subplot(121),plt.imshow(img),plt.title('Input')
-# plt.subplot(122),plt.imshow(dst),plt.title('Output')
-# plt.show()
+def polar_to_pixel(coords, sonar):
+    """
+    theta is in degrees, coords is a 2xN array
+    """
+    r = coords[1,:]
+    th = coords[0,:]
+    ypix = r/sonar.r_res
+    th += .5*sonar.aper
+    xpix = th/sonar.th_res
+    return np.array([xpix, ypix])
 
+def polar_from_3d(points):
+    """
+    image_from_sonar3d
+    Project 3D points in the sonar's frame to the (R, theta) data returned
+    by the sensor.
+
+    Input parameters:
+    points -- (xx, yy, zz) Coordinates of point to be transformed;
+              ndarray with shape (3,N)
+
+    Output:
+    angles, ranges -- Polar coordinates of point in the sonar image;
+              ndarray with shape (2,N)
+    """
+    xx = points[0, :]
+    yy = points[1, :]
+    zz = points[2, :]
+    ranges = np.sqrt(xx * xx + yy * yy + zz * zz)
+    angles = np.rad2deg(np.arctan2(xx, yy))
+    return np.array([angles, ranges])
 
 def get_black_squares(board):
     """
@@ -283,8 +215,8 @@ def get_black_squares(board):
 
     return centers
 
-def init_charuco_sonar():
-    aruco_dict, charuco_board = charuco_utils.make_charuco_board()
+def init_charuco_sonar(SQUARE_LENGTH = .026, MARKER_LENGTH = .0195):
+    aruco_dict, charuco_board = charuco_utils.make_charuco_board(SQUARE_LENGTH, MARKER_LENGTH)
 
     # If the charuco board is of a different shape, then our assumptions about
     # where the targets are will be wrong.
@@ -329,10 +261,12 @@ def get_sonar_target_correspondences(labeled_points, sonar):
     ranges = []
     target_points = []
     for label, (x_pixel, y_pixel) in labeled_points.items():
-        angle_deg, pt_range = pixel_to_polar((x_pixel, y_pixel), sonar)
-        #print(f'{label}: {angle_deg}, {pt_range}')
-        angles.append(np.radians(angle_deg))
-        ranges.append(pt_range)
+        # angle_deg, pt_range = pixel_to_polar((x_pixel, y_pixel), sonar)
+        # #print(f'{label}: {angle_deg}, {pt_range}')
+        # angles.append(np.radians(angle_deg))
+        # ranges.append(pt_range)
+        angles.append(x_pixel)
+        ranges.append(y_pixel)
         coord = sonar_coords[label]
         target_points.append([coord[0], coord[1], 0])
 
@@ -342,33 +276,13 @@ def get_sonar_target_correspondences(labeled_points, sonar):
     target_points = np.transpose(np.array(target_points))
     return sonar_points, target_points
 
-def polar_from_3d(points):
-    """
-    image_from_sonar3d
-    Project 3D points in the sonar's frame to the (R, theta) data returned
-    by the sensor.
 
-    Input parameters:
-    points -- (xx, yy, zz) Coordinates of point to be transformed;
-              ndarray with shape (3,N)
-
-    Output:
-    angles, ranges -- Polar coordinates of point in the sonar image;
-              ndarray with shape (2,N)
-    """
-    xx = points[0, :]
-    yy = points[1, :]
-    zz = points[2, :]
-    ranges = np.sqrt(xx * xx + yy * yy + zz * zz)
-    angles = np.arctan2(yy, xx)
-    return np.array([angles, ranges])
-
-def estimate_target_translation(target_points, sonar_points, range_resolution, angle_resolution, rvec, initial_tvec, verbose=True,):
-    err0 = calc_projection_error(target_points, sonar_points, rvec, initial_tvec, range_resolution, angle_resolution,)
+def estimate_target_translation(camera_points, sonar_points, sonar, rvec, initial_tvec, verbose=True,):
+    err0 = calc_projection_error(camera_points, sonar_points, rvec, initial_tvec, sonar)
     if verbose:
         print("Initial error: {}".format(err0))
     # noqa: E731
-    fn = lambda x: calc_projection_error(target_points, sonar_points, rvec, x, range_resolution, angle_resolution)
+    fn = lambda x: calc_projection_error(camera_points, sonar_points, rvec, x, sonar)
     opt = {"maxiter": 3000}
     res = scipy.optimize.minimize(fn, initial_tvec, method="Nelder-Mead", options=opt)
     if res.status != 0 or res.fun > 100:
@@ -378,7 +292,7 @@ def estimate_target_translation(target_points, sonar_points, range_resolution, a
         res = scipy.optimize.minimize(fn, res.x, method="Nelder-Mead", options=opt)
 
     tvec = np.reshape(res.x, (3, 1))
-    err_n = calc_projection_error(target_points, sonar_points, rvec, tvec, range_resolution, angle_resolution)
+    err_n = calc_projection_error(camera_points, sonar_points, rvec, tvec, sonar)
 
     if verbose:
         print("Final error: {}".format(err_n))
@@ -387,10 +301,9 @@ def estimate_target_translation(target_points, sonar_points, range_resolution, a
 
 
 def estimate_target_pose(
-    target_points,
-    sonar_points,
-    range_resolution,
-    angle_resolution,
+    camera_points,
+    sonar_points, 
+    sonar,
     initial,
     verbose=True,
 ):
@@ -405,14 +318,14 @@ def estimate_target_pose(
     #    * 2 is ???
     rvec = initial[0:3]
     tvec = initial[3:6]
-    err0 = calc_projection_error(target_points, sonar_points, rvec, tvec, range_resolution, angle_resolution)
+    err0 = calc_projection_error(camera_points, sonar_points, rvec, tvec, sonar)
 
     if verbose:
         print("Initial error: {}".format(err0))
         # print("(Using rvec = {}, tvec = {}".format(rvec, tvec))
 
     fn = lambda x: calc_projection_error(  # noqa: E731
-        target_points, sonar_points, x[0:3], x[3:6], range_resolution, angle_resolution
+        camera_points, sonar_points, x[0:3], x[3:6], sonar
     )
     opt = {"maxiter": 3000}
     res = scipy.optimize.minimize(fn, initial, method="Nelder-Mead", options=opt)
@@ -424,16 +337,15 @@ def estimate_target_pose(
 
     rvec = np.reshape(res.x[0:3], (3, 1))
     tvec = np.reshape(res.x[3:6], (3, 1))
-    err_n = calc_projection_error(
-        target_points, sonar_points, rvec, tvec, range_resolution, angle_resolution
-    )
+    err_n = calc_projection_error(camera_points, sonar_points, rvec, tvec, sonar)
+    
     if verbose:
         print("Final error: {}".format(err_n))
 
     return res.fun, rvec, tvec
 
 
-def calc_projection_error(target_points, sonar_points, rvec, tvec, range_resolution, angle_resolution):
+def calc_projection_error(camera_points, sonar_points, rvec, tvec, sonar):
     """
     Calculate the sum-squared reprojection error between corresponding points in the
     target frame and in the sonar image, given the input transform.
@@ -442,13 +354,13 @@ def calc_projection_error(target_points, sonar_points, rvec, tvec, range_resolut
     to convert from the SI units reportd by the sonar to pixels.
 
     Input parameters:
-    target_points -- (3,N) np.ndarray. points in the target's frame
+    camera_points -- (3,N) np.ndarray. points from target in camera frame
                      (will usually be planar, but not required!)
-                     * I think this should be points on target in camera's frame??
+                     
     sonar_points -- (2,N) np.ndarray. Corresponding points in the sonar image.
-                   1st row angles, 2nd is ranges. (in radians, meters, NOT pixels)
+                   1st row angles, 2nd is ranges. (in pixels)
     rvec, tvec -- rotation and transformation from the sonar frame
-                 (x fwd, y right, z down) to the target frame
+                 (x fwd, y right, z down) to the 
     range_resolution -- (in meters)
     angle_resolution -- (in radians)
     """
@@ -456,17 +368,20 @@ def calc_projection_error(target_points, sonar_points, rvec, tvec, range_resolut
     tvec = np.reshape(tvec, (3, 1))
     rot, _ = cv2.Rodrigues(rvec)
 
-    # Calculate target point locations in image, in meters/radians
-    target_sonar_frame = tvec + rot @ target_points
-    # print("Targets, in sonar frame: ", target_sonar_frame)
-    target_image_frame = polar_from_3d(target_sonar_frame)
-    # print("Targets, in image coordinates: ", target_image_frame)
+    # Project points from camera to sonar in xyz coords
+    sonar_frame = tvec + rot @ camera_points
+    # tvec and rvec from sonar to target
+
+    #print("Targets, in sonar frame: ", target_sonar_frame)
+    sonar_polar_frame = polar_from_3d(sonar_frame)
+    sonar_pixels = polar_to_pixel(sonar_polar_frame, sonar)
+    #print("Targets, in image coordinates: ", target_image_frame)
 
     # Calculate the reprojection error, in pixels
-    d_angle = (sonar_points[0, :] - target_image_frame[0, :]) / angle_resolution
-    # print("Angle errors: ", d_angle)
-    d_range = (sonar_points[1, :] - target_image_frame[1, :]) / range_resolution
-    # print("Range errors: ", d_range)
+    d_angle = (sonar_points[0, :] - sonar_pixels[0, :]) #/ sonar.th_res
+    #print("Angle errors: ", d_angle)
+    d_range = (sonar_points[1, :] - sonar_pixels[1, :]) #/ sonar.r_res
+    #print("Range errors: ", d_range)
     err = np.sum(np.sqrt(d_angle * d_angle + d_range * d_range))
     return err
 
@@ -493,8 +408,7 @@ def get_sonar_resolution(sonar_image):
 def calibrate_sonar(
     sonar_points,
     camera_points,
-    range_resolution,
-    angle_resolution,
+    sonar,
     init_rvec=None,
     init_tvec=None,
     verbose=True,
@@ -518,8 +432,7 @@ def calibrate_sonar(
     cs_err, cs_tvec = estimate_target_translation(
         camera_points,
         sonar_points,
-        range_resolution,
-        angle_resolution,
+        sonar,
         init_rvec,
         init_tvec,
         verbose,
@@ -540,8 +453,7 @@ def calibrate_sonar(
     cs_err, cs_rvec, cs_tvec = estimate_target_pose(
         camera_points,
         sonar_points,
-        range_resolution,
-        angle_resolution,
+        sonar,
         initial,
         verbose,
     )

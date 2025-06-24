@@ -9,7 +9,8 @@ SQUARE_LENGTH = .026
 MARKER_LENGTH = .0195           
 MARGIN_PX = 0   
 
-def make_charuco_board():
+
+def make_charuco_board(SQUARE_LENGTH, MARKER_LENGTH):
     # type: string -> Tuple[cv2.aruco_Dictionary, cv2.aruco_CharucoBoard]
     """
     Given the name of a board/plinth, return the dictionary used and the board.
@@ -37,9 +38,9 @@ def detect_charuco_board(board, image, mtx, dst):
     detector = cv2.aruco.CharucoDetector(board)
     charucoCorners, charucoIds, marker_corners, marker_ids = detector.detectBoard(image)
 
+
     if charucoCorners is not None and charucoIds is not None and len(charucoCorners) > 3:
         retval, rvec, tvec = cv2.aruco.estimatePoseCharucoBoard(np.array(charucoCorners), np.array(charucoIds), board, np.array(mtx), np.array(dst), np.empty(1), np.empty(1))
-    
     else:
         tvec, rvec = None, None
 
