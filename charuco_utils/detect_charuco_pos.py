@@ -39,7 +39,7 @@ def pos_from_image(color_image):
         retval, rvec, tvec = cv2.aruco.estimatePoseCharucoBoard(np.array(charucoCorners), np.array(charucoIds), board, np.array(mtx), np.array(dst), np.empty(1), np.empty(1))
         result = color_image.copy()
         cv2.aruco.drawDetectedMarkers(result, marker_corners, marker_ids)
-        #cv2.drawFrameAxes(result, np.array(mtx), np.array(dst), rvec, tvec, .1)
+        cv2.drawFrameAxes(result, np.array(mtx), np.array(dst), rvec, tvec, .1)
         #cv2.drawChessboardCorners(result, (BOARD_COLS, BOARD_ROWS), charucoCorners, retval)
 
         return tvec, rvec, result
@@ -82,3 +82,34 @@ single_image(test_path)
 
 # nb_pixels = 200
 # print(perspective_function(nb_pixels, Zz, fx))    
+
+
+# OLD PHONE JSON
+# {
+#     "mtx": [
+#         [
+#             3777.652001006542,
+#             0.0,
+#             921.0116448925918
+#         ],
+#         [
+#             0.0,
+#             4077.110071945852,
+#             1408.7761995830372
+#         ],
+#         [
+#             0.0,
+#             0.0,
+#             1.0
+#         ]
+#     ],
+#     "dist": [
+#         [
+#             -1.1787352496558914,
+#             2.315757044657758,
+#             -0.01674375258183813,
+#             0.10436731902626209,
+#             -2.5616981181460194
+#         ]
+#     ]
+# }

@@ -5,9 +5,14 @@ import numpy as np
 ARUCO_DICT_ID = cv2.aruco.DICT_4X4_250
 BOARD_ROWS = 8
 BOARD_COLS = 11
-SQUARE_LENGTH = .026       
-MARKER_LENGTH = .0195           
+SQUARE_LENGTH = .026    #.032 
+MARKER_LENGTH = .0195   #.024       
 MARGIN_PX = 0   
+
+# dictionary = cv2.aruco.getPredefinedDictionary(ARUCO_DICT_ID)
+# board = cv2.aruco.CharucoBoard((BOARD_COLS, BOARD_ROWS), SQUARE_LENGTH, MARKER_LENGTH, dictionary) 
+# image = board.generateImage((3300, 2400), None, 0, 1)
+# cv2.imwrite("charuco11x8_bigger.png", image)
 
 
 def make_charuco_board(SQUARE_LENGTH, MARKER_LENGTH):

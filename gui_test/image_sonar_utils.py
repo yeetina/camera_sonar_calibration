@@ -16,6 +16,8 @@ class SensorData():
         self.current_index = None
         self.sorted_pairs = []
 
+        # camera naming convention: YYYYMMDD_HHMMSS
+        # sonar naming convention: Oculus_YYYYMMDD_HHMMSS
         image_file_names = {f for f in os.listdir(self.camera_folder)}
         sonar_file_names = {f for f in os.listdir(self.sonar_folder)}
         sonar_sorted = sorted(list(sonar_file_names)) 
@@ -425,8 +427,8 @@ def calibrate_sonar(
         init_rvec = (1.2092, 1.2092, 1.2092)
     if init_tvec is None:
         init_tvec = (0, 0, 0)
-    #init_rvec = np.reshape(init_rvec, (3, 1))
-    #init_tvec = np.reshape(init_tvec, (3, 1))
+    # init_rvec = np.reshape(init_rvec, (3, 1))
+    # init_tvec = np.reshape(init_tvec, (3, 1))
     if verbose:
         print("Translation minimization:")
     cs_err, cs_tvec = estimate_target_translation(

@@ -134,9 +134,9 @@ outim = cv2.remap(masked, xmap, ymap, cv2.INTER_LINEAR)
 # print(thmax)
 # rectangular = cv2.flip(rectangular,-1)
 
-def raw_sonar_to_rectangular(image, range_m, wide=False):
-    masked = crop_sonar_arc(image, wide)
-    #cv2.imwrite("test_images/widemask.png", masked)
+def raw_sonar_to_rectangular(masked, range_m, wide=False):
+    #masked = crop_sonar_arc(image, wide)
+    #masked = image[:, 57:968]
 
     #if range is greater than 1.5m, use lower range resolution
     if range_m >= 1.5:
@@ -150,6 +150,7 @@ def raw_sonar_to_rectangular(image, range_m, wide=False):
         theta_bins = 216 #(aper/th_res)
         range_bins = int(range_m/r_res) #or 2.5
         x_center = 808
+        #x_center = 455
     else:
         aper = 40
         th_res = 0.4
@@ -157,16 +158,15 @@ def raw_sonar_to_rectangular(image, range_m, wide=False):
         range_bins = int(range_m/r_res)
         x_center = 305
     
-    print(range_bins, theta_bins)
+    #print(range_bins, theta_bins)
     rectangular = np.zeros((range_bins, theta_bins), dtype="uint8")
     height, width = masked.shape
-
-    print(width, height)
+    
     for y in range(height):
         for x in range(width):
-            if masked[y][x] != 0:
-                r, th = get_polar_coords(x, y, x_center, 892)
-                rscale = range_bins/892
+            if masked[y][x] != 0: 
+                r, th = get_polar_coords(x, y, x_center, 892) #507***
+                rscale = range_bins/892 #507***
                 tscale = theta_bins/aper
                 th = (th * 180/np.pi) + (aper/2)
                 r *= rscale
@@ -178,7 +178,8 @@ def raw_sonar_to_rectangular(image, range_m, wide=False):
                 col = max(col,0)
                 
                 rectangular[int(row)][int(col)] = masked[y][x]
-    return cv2.flip(rectangular,-1)
+    return rectangular #cv2.flip(rectangular,-1)***
+
 
 rectangular = raw_sonar_to_rectangular(colorim, 2.0, wide=True)
 

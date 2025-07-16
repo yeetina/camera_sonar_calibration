@@ -53,7 +53,7 @@ def get_calibration_parameters(img_dir):
     if all_ids and all_corners:
         result, mtx, dist, rvecs, tvecs = cv2.aruco.calibrateCameraCharuco(all_corners, all_ids, board, imgSize, None, None)
     else:
-        mtx, dst = [], []
+        mtx, dist = [], []
 
     return mtx, dist
 
@@ -61,7 +61,7 @@ def get_calibration_parameters(img_dir):
 #LENS = 'kowa_f12mm_F1.8'
 OUTPUT_JSON = 'phonecalibration.json'
 
-mtx, dist = get_calibration_parameters(img_dir='./test_images/new_charuco_board')
+mtx, dist = get_calibration_parameters(img_dir='C:/Users/corri/OneDrive/Documents/SonarExperimentData/testpairs/camera')
 #print(mtx, dist)
 # avg_mtx = np.mean(mtx, axis=0)
 # avg_dist = np.mean(dist, axis=0)
