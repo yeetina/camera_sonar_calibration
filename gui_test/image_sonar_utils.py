@@ -108,11 +108,12 @@ def crop_sonar_arc(sonar_im, sonarinfo):
     else:
         angle_start, angle_end = 249.5, 289.4
         centerpoint = (305,892)
-        cropped = sonar_im[50:942, 620:1232]
+        cropped = sonar_im[50:942, 567:1179]  #620:1232
     
     mask = np.zeros(cropped.shape[:2], dtype="uint8")
     cv2.ellipse(mask, centerpoint, (892, 892), 0.0, angle_start, angle_end, (255), -1)
     return cv2.bitwise_and(cropped, cropped, mask=mask)
+croptest = cv2.imread("C:/Users/corri/OneDrive/Documents/SonarExperimentData/07-21-2025/sonar/Oculus_20250721_153416.jpg")
 
 def create_transform_map(sonar):
     range_m = sonar.range
@@ -189,7 +190,7 @@ def polar_from_3d(points):
     yy = points[1, :]
     zz = points[2, :]
     ranges = np.sqrt(xx * xx + yy * yy + zz * zz)
-    angles = np.rad2deg(np.arctan2(xx, yy))
+    angles = np.rad2deg(np.arctan2(xx, zz))  #was xx, yy
     return np.array([angles, ranges])
 
 def get_black_squares(board):
@@ -263,17 +264,18 @@ def get_sonar_target_correspondences(labeled_points, sonar):
     ranges = []
     target_points = []
     for label, (x_pixel, y_pixel) in labeled_points.items():
-        # angle_deg, pt_range = pixel_to_polar((x_pixel, y_pixel), sonar)
+        angle_deg, pt_range = pixel_to_polar((x_pixel, y_pixel), sonar)
         # #print(f'{label}: {angle_deg}, {pt_range}')
-        # angles.append(np.radians(angle_deg))
-        # ranges.append(pt_range)
-        angles.append(x_pixel)
-        ranges.append(y_pixel)
+        angles.append(angle_deg)
+        ranges.append(pt_range)
+        # angles.append(x_pixel)
+        # ranges.append(y_pixel)
         coord = sonar_coords[label]
         target_points.append([coord[0], coord[1], 0])
 
     # angles = np.array([np.radians(nn) for nn, _ in points.values()])
     # ranges = np.array([nn for _, nn in points.values()])
+
     sonar_points = np.array([angles, ranges])
     target_points = np.transpose(np.array(target_points))
     return sonar_points, target_points
@@ -347,7 +349,7 @@ def estimate_target_pose(
     return res.fun, rvec, tvec
 
 
-def calc_projection_error(camera_points, sonar_points, rvec, tvec, sonar):
+def calc_projection_error(camera_points, sonar_points, rvec, tvec, sonar, verbose=False):
     """
     Calculate the sum-squared reprojection error between corresponding points in the
     target frame and in the sonar image, given the input transform.
@@ -369,6 +371,8 @@ def calc_projection_error(camera_points, sonar_points, rvec, tvec, sonar):
     rvec = np.reshape(rvec, (3, 1))
     tvec = np.reshape(tvec, (3, 1))
     rot, _ = cv2.Rodrigues(rvec)
+    if verbose:
+        print("rot", rot)
 
     # Project points from camera to sonar in xyz coords
     sonar_frame = tvec + rot @ camera_points
@@ -376,19 +380,22 @@ def calc_projection_error(camera_points, sonar_points, rvec, tvec, sonar):
 
     #print("Targets, in sonar frame: ", target_sonar_frame)
     sonar_polar_frame = polar_from_3d(sonar_frame)
-    sonar_pixels = polar_to_pixel(sonar_polar_frame, sonar)
+    #sonar_pixels = polar_to_pixel(sonar_polar_frame, sonar)
     #print("Targets, in image coordinates: ", target_image_frame)
 
     # Calculate the reprojection error, in pixels
-    d_angle = (sonar_points[0, :] - sonar_pixels[0, :]) #/ sonar.th_res
-    #print("Angle errors: ", d_angle)
-    d_range = (sonar_points[1, :] - sonar_pixels[1, :]) #/ sonar.r_res
-    #print("Range errors: ", d_range)
+    d_angle = (sonar_points[0, :] - sonar_polar_frame[0, :])/sonar.th_res
+    d_range = (sonar_points[1, :] - sonar_polar_frame[1, :])/sonar.r_res
+    if verbose:
+        print("Sonar projections",sonar_polar_frame)
+        print("Angle errors: ", d_angle)
+        print("Range errors: ", d_range)
     err = np.sum(np.sqrt(d_angle * d_angle + d_range * d_range))
     return err
 
 def get_sonar_resolution(sonar_image):
     """
+    NOT USED
     ONLY USED for converting angle errors into pixels.
 
     The sonar has constant range resolution, but angle-dependent
@@ -431,6 +438,7 @@ def calibrate_sonar(
     # init_tvec = np.reshape(init_tvec, (3, 1))
     if verbose:
         print("Translation minimization:")
+        print(init_rvec, init_tvec)
     cs_err, cs_tvec = estimate_target_translation(
         camera_points,
         sonar_points,
@@ -445,11 +453,13 @@ def calibrate_sonar(
         init_rvec[0],
         init_rvec[1],
         init_rvec[2],
-        cs_tvec[0][0],
-        cs_tvec[1][0],
-        cs_tvec[2][0],
+        init_tvec[0],
+        init_tvec[1],
+        init_tvec[2],
     ]
-
+    # cs_tvec[0][0],
+    #     cs_tvec[1][0],
+    #     cs_tvec[2][0],
     if verbose:
         print("Full minimization:")
     cs_err, cs_rvec, cs_tvec = estimate_target_pose(

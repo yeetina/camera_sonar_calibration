@@ -1,6 +1,7 @@
 import cv2
 import json
 import numpy as np
+import os
 
 
 ARUCO_DICT_ID = cv2.aruco.DICT_4X4_250
@@ -11,16 +12,21 @@ MARKER_LENGTH = .0195
 MARGIN_PX = 0     
 
 
-json_file_path = './phonecalibration.json'
+json_file_path = './underwater_cam.json'
 
 with open(json_file_path, 'r') as file: # Read the JSON file
     json_data = json.load(file)
 
 mtx = np.array(json_data['mtx'])
 dst = np.array(json_data['dist'])
-print(mtx, "\n", dst)
+# print(mtx, "\n", dst)
+mtx2 = np.array([[1.02082611e+03, 0.00000000e+00, 7.69307527e+02],
+    [0.00000000e+00, 1.02245381e+03, 2.90583592e+02],
+    [0.00000000e+00, 0.00000000e+00, 1.00000000e+00]])
+dst2 = np.array([[-3.76227154e-01,  1.94912143e-01, 
+                    -2.04912328e-03,  7.63774994e-05, -5.57738640e-02]])
 
-def pos_from_image(color_image):
+def pos_from_image(color_image, mtx, dst):
     image = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
 
     h,  w = image.shape[:2]
@@ -53,6 +59,16 @@ def single_image(filepath):
     cv2.imwrite("test_images/charucodetections.jpg", result)
     print(tv, "\n", rv)
 
+def image_folder(img_dir):
+    image_files = [os.path.join(img_dir, f) for f in os.listdir(img_dir) if f.endswith(".png")]
+    for image_file in image_files:
+        image = cv2.imread(image_file)
+        tvec, rvec, display = pos_from_image(image, mtx, dst)
+        tvec2, rvec2, display = pos_from_image(image, mtx2, dst2)
+        print(f"tvec: {tvec}\n{tvec2} \nrvec: {rvec}\n{rvec2}")
+        cv2.imshow('img', display)
+        cv2.waitKey(1000)
+    
 def video_stream():
     cap = cv2.VideoCapture(0)#cv2.CAP_DSHOW?
     cap.set(cv2.CAP_PROP_FPS, 2)
@@ -69,8 +85,8 @@ def video_stream():
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
-test_path = "C:/Users/corri/OneDrive/Documents/SonarExperimentData/testpairs/camera/20250619_163729.jpg"
-single_image(test_path)
+test_path = "C:/Users/corri/OneDrive/Documents/SonarExperimentData/07-21-2025/camera"
+image_folder(test_path)
 # rvec = np.array([-0.24193354, -0.06892308, -0.10476409])
 # dst, jac = cv2.Rodrigues(rvec)
 # print(dst)

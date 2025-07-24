@@ -22,7 +22,7 @@ def get_calibration_parameters(img_dir):
     all_ids = []
 
     # Load images from directory
-    image_files = [os.path.join(img_dir, f) for f in os.listdir(img_dir) if f.endswith(".jpg")]
+    image_files = [os.path.join(img_dir, f) for f in os.listdir(img_dir) if f.endswith(".png")]
     
     # Loop over images and extraction of corners
     for image_file in image_files:
@@ -41,7 +41,9 @@ def get_calibration_parameters(img_dir):
         #     cv2.circle(image_copy, (int(x), int(y)), 4, (0, 255, 0), -1)
 
         cv2.aruco.drawDetectedMarkers(image_copy, marker_corners, marker_ids, borderColor=(255, 0, 0))
-        cv2.imwrite("test_images/points.jpg", image_copy)
+        # cv2.imwrite("test_images/points.jpg", image_copy)
+        cv2.imshow('img', image_copy)
+        cv2.waitKey(500)
 
         #print(charucoCorners, marker_corners)
 
@@ -59,9 +61,9 @@ def get_calibration_parameters(img_dir):
 
 #SENSOR = 'monochrome'
 #LENS = 'kowa_f12mm_F1.8'
-OUTPUT_JSON = 'phonecalibration.json'
+OUTPUT_JSON = 'underwater_cam.json'
 
-mtx, dist = get_calibration_parameters(img_dir='C:/Users/corri/OneDrive/Documents/SonarExperimentData/testpairs/camera')
+mtx, dist = get_calibration_parameters(img_dir='C:/Users/corri/OneDrive/Documents/SonarExperimentData/07-21-2025/camera')
 #print(mtx, dist)
 # avg_mtx = np.mean(mtx, axis=0)
 # avg_dist = np.mean(dist, axis=0)
@@ -73,3 +75,4 @@ with open(OUTPUT_JSON, 'w') as json_file:
     json.dump(data, json_file, indent=4)
 
 print(f'Data has been saved to {OUTPUT_JSON}')
+

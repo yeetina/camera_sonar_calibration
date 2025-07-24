@@ -27,3 +27,8 @@ function [r, theta] = pixel_to_polar(row, col, height, width)
     r = norm([row col]-origin)
     theta = atan((height-row)/(col-origin(2)))
 end
+
+%%
+sonar = imread("C:/Users/corri/OneDrive/Documents/SonarExperimentData/07-21-2025/sonar/Oculus_20250721_153416.jpg");
+crop_sonar = sonar(50:942,568:1180,:);
+imshow(crop_sonar)

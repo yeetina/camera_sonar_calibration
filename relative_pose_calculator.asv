@@ -71,7 +71,7 @@ function [t, rot] = calculateSCPose(x, y, z, pitch1, pitch2, roll, yaw)
     %camx = 52.8; camz = 63; camy = ; 
     sony = 29+18; sonz = -91.39+60+58.8;
 
-    t = [xtotal; sony; -sonz] + rotX*[0; ytotal; offsetz] + rotXY*[offsetx; -cam_off; ztotal];  %rot*[camx; 0; 0];
+    t = [xtotal; sony; -sonz] + rotX*[0; ytotal; offsetz] + rotXY*[offsetx; cam_off; ztotal];  %rot*[camx; 0; 0];
 end
 
 function [t, rot] = calculateCSPose(x, y, z, pitch1, pitch2, roll, yaw)
