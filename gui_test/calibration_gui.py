@@ -4,7 +4,6 @@ import os
 import json
 import cycler
 import pickle
-import tensorflow as tf
 import numpy as np
 from PyQt5 import QtGui, QtWidgets, QtCore
 
@@ -34,11 +33,12 @@ class Camera():
         self.D = dst
 
 class EnterPointDialog(QtWidgets.QDialog):
-    def __init__(self, point_cb):
+    def __init__(self, point_cb, removing=False):
         super(EnterPointDialog, self).__init__()
         # This callback will be called with the label that should be removed
         self.setWindowTitle("Select Label")
         self.point_cb = point_cb
+        self.removing = removing
         self.setup_layout()
 
     def setup_layout(self):
@@ -48,6 +48,13 @@ class EnterPointDialog(QtWidgets.QDialog):
         ok_button.clicked.connect(self.handle_ok)
         cancel_button = QtWidgets.QPushButton("Cancel")
         cancel_button.clicked.connect(self.handle_cancel)
+        self.delete_all = False
+
+        checkbox_row = QtWidgets.QHBoxLayout()
+        if self.removing:
+            self.delete_all_box = QtWidgets.QCheckBox(text="Delete all?")
+            self.delete_all_box.stateChanged.connect(self.onStateChanged)
+            checkbox_row.addWidget(self.delete_all_box)
 
         text_row = QtWidgets.QHBoxLayout()
         text_row.addWidget(text_label)
@@ -59,6 +66,7 @@ class EnterPointDialog(QtWidgets.QDialog):
 
         layout = QtWidgets.QVBoxLayout()
         layout.addLayout(text_row)
+        layout.addLayout(checkbox_row)
         layout.addLayout(button_row)
         self.setLayout(layout)
 
@@ -67,8 +75,14 @@ class EnterPointDialog(QtWidgets.QDialog):
         self.done(0)
 
     def handle_ok(self):
-        self.point_cb(self.text_edit.text())
+        self.point_cb(self.text_edit.text(), self.delete_all)
         self.done(0)
+
+    def onStateChanged(self):
+        if self.delete_all_box.isChecked():
+            self.delete_all = True
+        else:
+            self.delete_all = False
 
 class AnnotatedCanvas(QtWidgets.QWidget):
     """Widget that gives canvas a title and a `?` with mouseover help"""
@@ -112,21 +126,10 @@ class SensorWindow(QtWidgets.QMainWindow):
             print("")
             raise (ex)
 
-        
         self._main = QtWidgets.QWidget()
         self.setCentralWidget(self._main)
         self.setup_layout()
         self.setup_data(json_file_path)
-
-        #wrong
-        phone_mtx = np.array([[942.6847133455641, 0.0, 229.60291730101702],
-                            [0.0, 4077.110071945852, 1408.7761995830372],
-                            [0.0, 0.0, 1.0]])
-        phone_dst = np.array([[-1.1701606614778872,
-                    2.27606959770457,
-                    -0.016377618529930534,
-                    0.10323614752890109,
-                    -2.4914094424655855]])
         self.initialize_camera()
 
         (self.aruco_dict, self.charuco_board, self.sonar_coords) = isc.init_charuco_sonar() #can change length params here
@@ -145,13 +148,14 @@ class SensorWindow(QtWidgets.QMainWindow):
             print("Could not open json file: {}".format(json_file))
             print("Creating new json file now")
             sonar_in = float(input("Range (as a float): "))
-            wide_in = bool(input("Using wide field of view? (True/False) "))
+            wide_in = input("Using wide field of view? (True/False) ")
+            wide_bool = True if wide_in.lower() == "true" else False
             t_in = input("External translation vector: ")
-            t_in = list(t_in.split(", "))
+            t_data = [float(num) for num in list(t_in.split(", "))] 
             r_in = input("External rotation vector: ")
-            r_in = list(r_in.split(", "))
-            json_data = {"sonar_range": sonar_in, "sonar_wide": wide_in, 
-                    "ext_t": t_in, "ext_r": r_in}
+            r_data = [float(num) for num in list(r_in.split(", "))] 
+            json_data = {"sonar_range": sonar_in, "sonar_wide": wide_bool, 
+                    "ext_t": t_data, "ext_r": r_data}
             with open(json_file, 'w') as json_file:
                 json.dump(json_data, json_file, indent=4)
 
@@ -184,27 +188,15 @@ class SensorWindow(QtWidgets.QMainWindow):
             mtx = np.array(json_data['mtx'])
             dst = np.array(json_data['dist'])
         else:
-            # # from chessboard
+            # from chessboard
             mtx = np.array([[1.02082611e+03, 0.00000000e+00, 7.69307527e+02],
                 [0.00000000e+00, 1.02245381e+03, 2.90583592e+02],
                 [0.00000000e+00, 0.00000000e+00, 1.00000000e+00]])
             dst = np.array([[-3.76227154e-01,  1.94912143e-01, 
                              -2.04912328e-03,  7.63774994e-05, -5.57738640e-02]])
-            # from charuco
-            # mtx = np.array([[1178.2196212774513, 0.0, 530.5473048879014],
-            #     [0.0, 1117.5996234679171, 600.7919212788147],
-            #     [0.0, 0.0, 1.0]])
-            # dst = np.array([[
-            #     -0.8009327810605369,
-            #     0.7498969752041555,
-            #     -0.09031012827290873,
-            #     0.019222292968770704,
-            #     -0.6090044574942739]])
-
         self.camera_info = Camera(mtx, dst)
 
     def setup_layout(self):
-        #rospy.logwarn("SensorWindow.setup_layout")
         self.layout = QtWidgets.QVBoxLayout(self._main)
 
         ###################
@@ -363,10 +355,8 @@ class SensorWindow(QtWidgets.QMainWindow):
         self.next_button = QtWidgets.QPushButton("Next")
         self.next_button.setStyleSheet("padding: 3px;")
         self.next_button.clicked.connect(self.handle_next_button)
-        # Skip 10 images
         self.next10_button = QtWidgets.QPushButton("Next10")
         self.next10_button.setStyleSheet("padding: 3px;")
-        #self.next10_button.clicked.connect(self.handle_next10_button)
 
         # Mark this image as "good" (saves to disk)
         self.good_button = QtWidgets.QPushButton("Mark Good")
@@ -377,12 +367,6 @@ class SensorWindow(QtWidgets.QMainWindow):
         self.ungood_button.clicked.connect(self.handle_unmark_good_button)
 
         # Updates the display to the next/prev data that had ben marked "good"
-        # NB: there are two very confusing ways of stepping through the data.
-        # 1) Sequentially, using next/skip/next10
-        # 2) back/fwd through saved frames, using good/next/prev
-        # clicking "next" will always jump you back to whatever comes out of
-        # the bag file next; next/prev good buttons are always relative to
-        # the current timestamp.
         self.next_good_button = QtWidgets.QPushButton("Next Good")
         self.next_good_button.setStyleSheet("padding: 3px;")
         self.next_good_button.clicked.connect(self.handle_next_good_button)
@@ -411,7 +395,6 @@ class SensorWindow(QtWidgets.QMainWindow):
         self.button_row.addWidget(self.ungood_button)
         self.button_row.addWidget(self.next_good_button)
         self.button_row.addWidget(self.next_button)
-        #self.button_row.addWidget(self.next10_button)
         self.button_row.addWidget(self.remove_label_button)
         self.button_row.addWidget(self.skip_button)
 
@@ -591,32 +574,27 @@ class SensorWindow(QtWidgets.QMainWindow):
         self.camera_annotated_sonar_ax.axis("off")
         self.camera_annotated_sonar_ax.imshow(camera_data, cmap="gray")
 
-        # color_cycler = cycler.cycler(color=matplotlib.cm.inferno(np.linspace(0,1,10)))
         color_cycler = cycler.cycler(color=matplotlib.cm.plasma(np.linspace(0, 1, 10)))
         my_cycler = color_cycler()
 
         if self.current_timestamp in self.sonar_labels:
             points = self.sonar_labels[self.current_timestamp]
             for label, coord in points.items():
-                azi_deg, rr = isc.pixel_to_polar(coord, self.sonar_params) #convert from pixels to real units
+                azi_deg, rr = isc.pixel_to_polar(coord, self.sonar_params) 
                 azi_rad = np.radians(azi_deg)
                 elev_rads = np.arange(np.radians(-10.0), np.radians(10.0), np.radians(0.25)) 
                 label_color = next(my_cycler)["color"]
 
-                #print("theta, rr, color: ", azi_deg, rr, label_color)
                 for elev_rad in elev_rads:
                     #Changed coordinate system to match camera
                     yy = -rr * np.sin(elev_rad)
                     zz = rr * np.cos(elev_rad) * np.cos(azi_rad)
                     xx = rr * np.cos(elev_rad) * np.sin(azi_rad)
                     sonar_point = np.reshape([xx, yy, zz], (3, 1))
-                    #print(f'sonar polar = {rr, azi_rad, elev_rad}, sonar xyz {xx, yy, zz}')
                     
                     # cs_{trans, rot} give transformation from camera to sonar frame
                     # We need the opposite here ...
                     camera_coord = np.transpose(cs_rot) @ (sonar_point - cs_trans)
-                    #print(f'sonar: {sonar_point},\ncamera: {camera_coord}') #these seem reasonable
-                    zero = np.reshape([0, 0, 0], (3, 1))
 
                     image_coord, _ = cv2.projectPoints(
                         camera_coord,
@@ -628,7 +606,6 @@ class SensorWindow(QtWidgets.QMainWindow):
                     
                     ix, iy = image_coord[0][0]
                     ix, iy = int(ix), int(iy)
-                    #print("camera sonar", camera_coord, ix, iy, "r ", rr)
                     # don't plot points outside the FOV
                     nrows, ncols = camera_data.shape[:2]
                     if ix >= 0 and ix < ncols and iy >= 0 and iy < nrows:
@@ -637,7 +614,6 @@ class SensorWindow(QtWidgets.QMainWindow):
                         )
 
                 # Intentionally plot the label for the last point drawn
-                #print("last point", ix, iy)
                 self.camera_annotated_sonar_ax.text(ix, iy, label, color=label_color)
 
         self.camera_annotated_sonar_canvas.draw()
@@ -648,7 +624,7 @@ class SensorWindow(QtWidgets.QMainWindow):
         Update the figure that shows the inferred position of the sonar
         targets superimposed on the camera data.
 
-        This serves to check that I have the transformations correct from
+        This serves to check that the transformation is correct from
         coordinates on the target to the image frame.
         """
         self.camera_annotated_camera_ax.cla()
@@ -1016,25 +992,29 @@ class SensorWindow(QtWidgets.QMainWindow):
 
 #handle_print_button
     def handle_remove_label_button(self):
-        dialog = EnterPointDialog(self.remove_point)
+        dialog = EnterPointDialog(self.remove_point, True)
         time_str = isc.timestamp_tostr(self.current_timestamp)
         target_filename = "{}/{}_target.png".format(self.outdir, time_str)
         self.target_fig.savefig(target_filename)
         dialog.exec_()
 
-    def remove_point(self, text):
+    def remove_point(self, text, remove_all):
         if self.current_timestamp in self.sonar_labels:
-            label = text.strip().upper()
-            # Technically, pop doesn't require checking if the dict contains
-            # the key, but we only want to redraw if necessary.
-            if label in self.sonar_labels[self.current_timestamp]:
-                self.sonar_labels[self.current_timestamp].pop(label, None)
-                if len(self.sonar_labels[self.current_timestamp]) == 0:
-                    del self.sonar_labels[self.current_timestamp]
-                self.save_state()
-                self.update_plots(keep_limits=False)
+            if remove_all:
+                del self.sonar_labels[self.current_timestamp]
+            else:
+                label = text.strip().upper()
+                # Technically, pop doesn't require checking if the dict contains
+                # the key, but we only want to redraw if necessary.
+                if label in self.sonar_labels[self.current_timestamp]:
+                    self.sonar_labels[self.current_timestamp].pop(label, None)
+                    if len(self.sonar_labels[self.current_timestamp]) == 0:
+                        del self.sonar_labels[self.current_timestamp]
+                    
+            self.save_state()
+            self.update_plots()
     
-    def add_point(self, event, text):
+    def add_point(self, event, text, remove_all):
         """
         User selection of points
         """
@@ -1048,7 +1028,7 @@ class SensorWindow(QtWidgets.QMainWindow):
 
         self.sonar_labels[self.current_timestamp][label] = (event.xdata, event.ydata)
         self.save_state()
-        self.update_plots(keep_limits=False)
+        self.update_plots()
         print("point added", event.xdata, ", ", event.ydata)
 
     def handle_sonar_click(self, event):
@@ -1068,7 +1048,7 @@ class SensorWindow(QtWidgets.QMainWindow):
             or abs(self.click_event.y - event.y) > 2
         ):
             return
-        dialog = EnterPointDialog(lambda x, event=event: self.add_point(event, x))
+        dialog = EnterPointDialog(lambda x, delete, event=event: self.add_point(event, x, False))
         dialog.exec_()
         
     def update_good_label(self):
@@ -1184,7 +1164,7 @@ class SensorWindow(QtWidgets.QMainWindow):
         return sonar_points, target_points, camera_points, cs_rvec, cs_tvec, sonar_rvec, sonar_tvec, cs_err
     
     def multi_calibration(self, camera_rvec, camera_tvec):
-        if not self.calibration_points or not camera_rvec:
+        if not self.calibration_points or camera_rvec is None:
             return None, None, None, None, None
         
         all_sonar_points = []
@@ -1213,6 +1193,8 @@ class SensorWindow(QtWidgets.QMainWindow):
         sonar_tvec = agg_cs_tvec + agg_cs_rot @ camera_tvec
         sonar_rot = agg_cs_rot @ camera_rot
         sonar_rvec, _ = cv2.Rodrigues(sonar_rot)
+
+
         return agg_cs_rvec, agg_cs_tvec, sonar_rvec, sonar_tvec, agg_cs_err
     
 #good below here
@@ -1246,7 +1228,7 @@ class SensorWindow(QtWidgets.QMainWindow):
         agg_cs_rvec, agg_cs_tvec, agg_son_rvec, agg_son_tvec, agg_cs_err= self.multi_calibration(camera_rvec, camera_tvec)
 
         print("overall calibration value\n", agg_cs_rvec, agg_cs_tvec)
-        self.sonar_image_ax.imshow(self.sonar_image)
+        #self.sonar_image_ax.imshow(self.sonar_image)
         self.plot_sonar_image(sonar_matrix, None, None, extent_degrees, keep_limits=keep_limits)
         self.plot_polar_sonar_image(sonar_matrix)
 
@@ -1259,6 +1241,7 @@ class SensorWindow(QtWidgets.QMainWindow):
         else:
             cs_rotation, _ = cv2.Rodrigues(cs_rvec)
 
+        #agg_err = isc.calc_projection_error(camera_points, sonar_points, agg_cs_rvec, agg_cs_tvec, self.sonar_params)
         self.plot_camera_targets_from_sonar(camera_gray, self.camera_info, cs_rotation, cs_tvec)
 
         self.plot_sonar_targets_from_camera(
@@ -1269,16 +1252,20 @@ class SensorWindow(QtWidgets.QMainWindow):
 
     def load_state(self):
         filename = "{}/calibration_labels.pkl".format(self.outdir)
+        calibration_filename = "{}/calibration_data.pkl".format(self.outdir)
         if os.path.exists(filename):
             try:
                 with open(filename, "rb") as fp:
                     data = pickle.load(fp)
+                with open(calibration_filename, "rb") as fp:
+                    points = pickle.load(fp)
                 # backwards-compatible with previous format
                 # TODO: Maybe move this out of the try/except block?
                 if "good_timestamps" in data:
                     good = data["good_timestamps"]
                 else:
                     good = set()
+                
                 return good, data["skip_timestamps"], data["sonar_labels"]
 
             except Exception as ex:
@@ -1330,5 +1317,6 @@ if __name__ == "__main__":
 
     app = QtWidgets.QApplication(sys.argv)
     window = SensorWindow(rootdir)
+    window.showMaximized()         #setWindowState(Qt::WindowMaximized)
     window.show()
     sys.exit(app.exec_())

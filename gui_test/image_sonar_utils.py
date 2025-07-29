@@ -4,6 +4,7 @@ import numpy as np
 import scipy
 import scipy.optimize
 import os
+import json
 import matplotlib.pyplot as plt
 
 import charuco_utils
@@ -72,10 +73,10 @@ class SensorPair():
         return self.timestamp
 
 class SonarInfo():
-    def __init__(self, range_m, wide):
+    def __init__(self, range_m, wide, crop_json="sonar_cropping_params.json"):
         self.range = range_m
         self.wide = wide
-        if range_m >= 1.5:
+        if range_m > 1.5:
             self.r_res = .0025
         else:
             self.r_res = .002
@@ -83,15 +84,21 @@ class SonarInfo():
         if wide:
             self.aper = 130
             self.th_res = 0.6
-            self.theta_bins = 216 #(aper/th_res)
-            self.range_bins = int(range_m/self.r_res) 
-            self.x_center = 808
+            self.theta_bins = 1300 # 216 (aper/th_res)
+            self.range_bins = 892 # int(range_m/self.r_res) 
+            #self.x_center = 808
         else:
             self.aper = 40
             self.th_res = 0.4
-            self.theta_bins = int(self.aper/self.th_res) #columns
-            self.range_bins = int(range_m/self.r_res)
-            self.x_center = 305
+            self.theta_bins = 400 #int(self.aper/self.th_res) columns
+            self.range_bins = 892 #int(range_m/self.r_res)
+            #self.x_center = 305
+
+        with open(crop_json, 'r') as file: # Read the JSON file
+            params = json.load(file)
+        self.crop_params = params
+        print(params)
+
 
 def timestamp_tostr(timestamp):
     return str(timestamp).replace(":","-")
@@ -101,17 +108,22 @@ def crop_sonar_arc(sonar_im, sonarinfo):
     Isolate the sonar display from images saved by oculus software
     """
     #sonar_im = cv2.cvtColor(image.copy(), cv2.COLOR_RGB2GRAY)
-    if sonarinfo.wide:
-        angle_start, angle_end = 205, 335
-        centerpoint = (808,892)
-        cropped = sonar_im[50:942, 117:1733]
-    else:
-        angle_start, angle_end = 249.5, 289.4
-        centerpoint = (305,892)
-        cropped = sonar_im[50:942, 567:1179]  #620:1232
+    # if sonarinfo.wide:
+    #     angle_start, angle_end = 205, 335
+    #     centerpoint = (808,892)
+    #     cropped = sonar_im[50:942, 117:1733]
+    # else:
+    #     angle_start, angle_end = 249.5, 289.4
+    #     centerpoint = (305,892)
+    #     cropped = sonar_im[50:942, 567:1179]  #620:1232
+    params = sonarinfo.crop_params
+    angle_start, angle_end = params["angle_start"], params["angle_end"]
+    top, bottom = params["crop_top"], params["crop_bottom"]
+    left, right = params["crop_left"], params["crop_right"]
+    cropped = sonar_im[top:bottom, left:right]
     
     mask = np.zeros(cropped.shape[:2], dtype="uint8")
-    cv2.ellipse(mask, centerpoint, (892, 892), 0.0, angle_start, angle_end, (255), -1)
+    cv2.ellipse(mask, params["center"], (params["radius"], params["radius"]), 0.0, angle_start+270, angle_end+270, (255), -1)
     return cv2.bitwise_and(cropped, cropped, mask=mask)
 croptest = cv2.imread("C:/Users/corri/OneDrive/Documents/SonarExperimentData/07-21-2025/sonar/Oculus_20250721_153416.jpg")
 
@@ -122,7 +134,7 @@ def create_transform_map(sonar):
     th_res = sonar.th_res
     theta_bins = sonar.theta_bins
     range_bins = sonar.range_bins
-    x_center = sonar.x_center
+    x_center = sonar.crop_params["center"][0]
     
     x_map = np.zeros((range_bins, theta_bins), dtype=np.float32)
     y_map = np.zeros((range_bins, theta_bins), dtype=np.float32)
@@ -130,8 +142,10 @@ def create_transform_map(sonar):
     #x is theta_bin, y is range_bin
     for y in range(range_bins):
         for x in range(theta_bins):
-            theta_rad = (x*th_res - aper/2) * np.pi/180
-            r_pix = (range_bins-y-1) * r_res * 892/range_m
+            # theta_rad = (x*th_res - aper/2) * np.pi/180
+            # r_pix = (range_bins-y-1) * r_res * 892/range_m
+            theta_rad = (x*0.1 - aper/2) * np.pi/180
+            r_pix = range_bins-y-1
             dx = r_pix*np.sin(theta_rad)
             dy = r_pix*np.cos(theta_rad)
             #print(x, y, dx, dy)
@@ -157,8 +171,8 @@ def pixel_to_polar(coord, sonar):
     Given pixel coordinates, find the polar theta (deg) and r (m)
     """
     xpix, ypix = coord
-    theta_deg = (xpix*sonar.th_res - sonar.aper/2)
-    r_meters = (ypix) * sonar.r_res
+    theta_deg = (xpix*0.1 - sonar.aper/2)
+    r_meters = ypix * sonar.range / 892
     return theta_deg, r_meters
 
 def polar_to_pixel(coords, sonar):
@@ -167,9 +181,9 @@ def polar_to_pixel(coords, sonar):
     """
     r = coords[1,:]
     th = coords[0,:]
-    ypix = r/sonar.r_res
+    ypix = r * 892/sonar.range
     th += .5*sonar.aper
-    xpix = th/sonar.th_res
+    xpix = th/0.1
     return np.array([xpix, ypix])
 
 def polar_from_3d(points):
@@ -362,7 +376,7 @@ def calc_projection_error(camera_points, sonar_points, rvec, tvec, sonar, verbos
                      (will usually be planar, but not required!)
                      
     sonar_points -- (2,N) np.ndarray. Corresponding points in the sonar image.
-                   1st row angles, 2nd is ranges. (in pixels)
+                   1st row angles, 2nd is ranges. 
     rvec, tvec -- rotation and transformation from the sonar frame
                  (x fwd, y right, z down) to the 
     range_resolution -- (in meters)
@@ -383,7 +397,7 @@ def calc_projection_error(camera_points, sonar_points, rvec, tvec, sonar, verbos
     #sonar_pixels = polar_to_pixel(sonar_polar_frame, sonar)
     #print("Targets, in image coordinates: ", target_image_frame)
 
-    # Calculate the reprojection error, in pixels
+    # Calculate the reprojection error
     d_angle = (sonar_points[0, :] - sonar_polar_frame[0, :])/sonar.th_res
     d_range = (sonar_points[1, :] - sonar_polar_frame[1, :])/sonar.r_res
     if verbose:
@@ -453,13 +467,11 @@ def calibrate_sonar(
         init_rvec[0],
         init_rvec[1],
         init_rvec[2],
-        init_tvec[0],
-        init_tvec[1],
-        init_tvec[2],
+        cs_tvec[0][0],
+        cs_tvec[1][0],
+        cs_tvec[2][0],
     ]
-    # cs_tvec[0][0],
-    #     cs_tvec[1][0],
-    #     cs_tvec[2][0],
+     
     if verbose:
         print("Full minimization:")
     cs_err, cs_rvec, cs_tvec = estimate_target_pose(
