@@ -1,3 +1,9 @@
+# This method doesn't work very well. When using the rtsp protocol, I had to use
+# multithreading to prevent the images from being very pixelated or glitchy.  
+# With continous streaming, there was the problem of extreme lag. I set it up 
+# to quit after saving one image to avoid that problem, but it doesn't quit 
+# cleanly and I end up having to kill the program manually. 
+
 import cv2
 import numpy as np
 from datetime import datetime, date, time, timezone
@@ -36,7 +42,6 @@ def Display():
             timestamp = str(now).replace("-", "")
             timestamp = timestamp.replace(" ", "_")
             timestamp = timestamp.replace(":", "")
-            #print(timestamp[:15])
             filename = f"test_images/7-21-2025/camera/{timestamp[:15]}.png"
             cv2.imwrite(filename, frame)
             print(filename, " saved")
@@ -52,32 +57,3 @@ if __name__=='__main__':
     p2 = threading.Thread(target=Display)
     p1.start()
     p2.start()
-
-
-# while True:
-#     # show the image
-#     ret, frame = cap.read() 
-    
-#     if not ret:
-#         print("ret error")
-#         break
-
-#     cv2.imshow("Output", frame)
-#     cv2.waitKey(3)
-
-#     if cv2.waitKey(33) & 0xFF == ord('s'):
-#         now = datetime.now()
-#         timestamp = str(now).replace("-", "")
-#         timestamp = timestamp.replace(" ", "_")
-#         timestamp = timestamp.replace(":", "")
-#         #print(timestamp[:15])
-#         filename = f"test_images/calibration_validation/frame{timestamp[:15]}.png"
-#         cv2.imwrite(filename, frame)
-#         print(filename, " saved")
-                
-#     #press q to quit
-#     if cv2.waitKey(1) & 0xFF == ord('q'):
-#         break
-
-# cap.release()  
-# cv2.destroyAllWindows()

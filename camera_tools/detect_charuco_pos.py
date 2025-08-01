@@ -3,14 +3,12 @@ import json
 import numpy as np
 import os
 
-
 ARUCO_DICT_ID = cv2.aruco.DICT_4X4_250
 BOARD_ROWS = 8
 BOARD_COLS = 11
 SQUARE_LENGTH = .026       
 MARKER_LENGTH = .0195           
 MARGIN_PX = 0     
-
 
 json_file_path = './underwater_cam.json'
 
@@ -19,12 +17,6 @@ with open(json_file_path, 'r') as file: # Read the JSON file
 
 mtx = np.array(json_data['mtx'])
 dst = np.array(json_data['dist'])
-# print(mtx, "\n", dst)
-mtx2 = np.array([[1.02082611e+03, 0.00000000e+00, 7.69307527e+02],
-    [0.00000000e+00, 1.02245381e+03, 2.90583592e+02],
-    [0.00000000e+00, 0.00000000e+00, 1.00000000e+00]])
-dst2 = np.array([[-3.76227154e-01,  1.94912143e-01, 
-                    -2.04912328e-03,  7.63774994e-05, -5.57738640e-02]])
 
 def pos_from_image(color_image, mtx, dst):
     image = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
@@ -64,8 +56,6 @@ def image_folder(img_dir):
     for image_file in image_files:
         image = cv2.imread(image_file)
         tvec, rvec, display = pos_from_image(image, mtx, dst)
-        tvec2, rvec2, display = pos_from_image(image, mtx2, dst2)
-        print(f"tvec: {tvec}\n{tvec2} \nrvec: {rvec}\n{rvec2}")
         cv2.imshow('img', display)
         cv2.waitKey(1000)
     
@@ -84,48 +74,3 @@ def video_stream():
         #press q to quit
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
-
-test_path = "C:/Users/corri/OneDrive/Documents/SonarExperimentData/07-21-2025/camera"
-image_folder(test_path)
-# rvec = np.array([-0.24193354, -0.06892308, -0.10476409])
-# dst, jac = cv2.Rodrigues(rvec)
-# print(dst)
-
-#video_stream()
-
-# def perspective_function(x, Z, f): 
-#     return x*Z/f
-
-# nb_pixels = 200
-# print(perspective_function(nb_pixels, Zz, fx))    
-
-
-# OLD PHONE JSON
-# {
-#     "mtx": [
-#         [
-#             3777.652001006542,
-#             0.0,
-#             921.0116448925918
-#         ],
-#         [
-#             0.0,
-#             4077.110071945852,
-#             1408.7761995830372
-#         ],
-#         [
-#             0.0,
-#             0.0,
-#             1.0
-#         ]
-#     ],
-#     "dist": [
-#         [
-#             -1.1787352496558914,
-#             2.315757044657758,
-#             -0.01674375258183813,
-#             0.10436731902626209,
-#             -2.5616981181460194
-#         ]
-#     ]
-# }

@@ -5,14 +5,20 @@ import numpy as np
 ARUCO_DICT_ID = cv2.aruco.DICT_4X4_250
 BOARD_ROWS = 8
 BOARD_COLS = 11
-SQUARE_LENGTH = .026    #.032 
-MARKER_LENGTH = .0195   #.024       
+SQUARE_LENGTH = .026   
+MARKER_LENGTH = .0195   
 MARGIN_PX = 0   
 
-# dictionary = cv2.aruco.getPredefinedDictionary(ARUCO_DICT_ID)
-# board = cv2.aruco.CharucoBoard((BOARD_COLS, BOARD_ROWS), SQUARE_LENGTH, MARKER_LENGTH, dictionary) 
-# image = board.generateImage((3300, 2400), None, 0, 1)
-# cv2.imwrite("charuco11x8_bigger.png", image)
+def generate_charuco_board_image(pixel_dims, filename):
+    """
+    Save an image of the charuco target
+    pixel_dims: tuple of width, height in pixels ex. (3300, 2400)
+    filename: name that the image will be saved as (include image type extension)
+    """
+    dictionary = cv2.aruco.getPredefinedDictionary(ARUCO_DICT_ID)
+    board = cv2.aruco.CharucoBoard((BOARD_COLS, BOARD_ROWS), SQUARE_LENGTH, MARKER_LENGTH, dictionary) 
+    image = board.generateImage(pixel_dims, None, 0, 1)
+    cv2.imwrite(filename, image)
 
 
 def make_charuco_board(SQUARE_LENGTH, MARKER_LENGTH):
@@ -42,7 +48,6 @@ def detect_charuco_board(board, image, mtx, dst):
     #image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
     detector = cv2.aruco.CharucoDetector(board)
     charucoCorners, charucoIds, marker_corners, marker_ids = detector.detectBoard(image)
-
 
     if charucoCorners is not None and charucoIds is not None and len(charucoCorners) > 3:
         retval, rvec, tvec = cv2.aruco.estimatePoseCharucoBoard(np.array(charucoCorners), np.array(charucoIds), board, np.array(mtx), np.array(dst), np.empty(1), np.empty(1))

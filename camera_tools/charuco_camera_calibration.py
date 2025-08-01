@@ -59,15 +59,9 @@ def get_calibration_parameters(img_dir):
 
     return mtx, dist
 
-#SENSOR = 'monochrome'
-#LENS = 'kowa_f12mm_F1.8'
 OUTPUT_JSON = 'underwater_cam.json'
 
 mtx, dist = get_calibration_parameters(img_dir='C:/Users/corri/OneDrive/Documents/SonarExperimentData/07-21-2025/camera')
-#print(mtx, dist)
-# avg_mtx = np.mean(mtx, axis=0)
-# avg_dist = np.mean(dist, axis=0)
-# print(mtx, avg_mtx)
 
 data = {"mtx": mtx.tolist(), "dist": dist.tolist()} #"sensor": SENSOR, "lens": LENS, 
 
