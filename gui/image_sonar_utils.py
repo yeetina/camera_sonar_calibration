@@ -118,15 +118,6 @@ def create_transform_map(sonar):
 
     return x_map, y_map
 
-def get_polar_coords(pixelx, pixely, originx, originy):
-    """Radius is in pixels and theta is in radians
-    """
-    rad = np.sqrt((pixely-originy)**2 + (pixelx-originx)**2)
-    try:
-        theta = np.atan((pixelx-originx)/(pixely-originy)) #in radians I think
-    except:
-        theta = 0
-    return rad, theta
 
 def pixel_to_polar(coord, sonar):
     """
@@ -193,8 +184,8 @@ def get_black_squares(board):
 
     return centers
 
-def init_charuco_sonar(SQUARE_LENGTH = .026, MARKER_LENGTH = .0195):
-    aruco_dict, charuco_board = charuco_utils.make_charuco_board(SQUARE_LENGTH, MARKER_LENGTH)
+def init_charuco_sonar():
+    aruco_dict, charuco_board = charuco_utils.make_charuco_board()
     # If the charuco board is of a different shape, then our assumptions about
     # where the targets are will be wrong.
     ncols, nrows = charuco_board.getChessboardSize()

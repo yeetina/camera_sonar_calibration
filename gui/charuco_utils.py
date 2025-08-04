@@ -21,7 +21,7 @@ def generate_charuco_board_image(pixel_dims, filename):
     cv2.imwrite(filename, image)
 
 
-def make_charuco_board(SQUARE_LENGTH, MARKER_LENGTH):
+def make_charuco_board():
     # type: string -> Tuple[cv2.aruco_Dictionary, cv2.aruco_CharucoBoard]
     """
     Given the name of a board/plinth, return the dictionary used and the board.

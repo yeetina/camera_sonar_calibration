@@ -1,3 +1,32 @@
+# Author: Laura Lindzey
+# Copyright 2020-2022 University of Washington Applied Physics Laboratory
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice,
+#    this list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
+#    and/or other materials provided with the distribution.
+#
+# 3. Neither the name of the copyright holder nor the names of its
+#    contributors may be used to endorse or promote products derived from
+#    this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+# THE POSSIBILITY OF SUCH DAMAGE.
+
 import cv2
 import sys
 import os
@@ -133,7 +162,7 @@ class SensorWindow(QtWidgets.QMainWindow):
         self.setup_data(json_file_path)
         self.initialize_camera()
 
-        (self.aruco_dict, self.charuco_board, self.sonar_coords) = isc.init_charuco_sonar() #can change length params here
+        (self.aruco_dict, self.charuco_board, self.sonar_coords) = isc.init_charuco_sonar() 
 
         self.handle_next_button()
 
@@ -176,8 +205,6 @@ class SensorWindow(QtWidgets.QMainWindow):
         # calibration_results is a dict mapping timestamps to calibration results and the
         # sonar and camera points used to calculate the calibrataion
 
-        # initialize aggregate calibration results using previous data
-        #self.agg_err, self.agg_rvec, self.agg_tvec = self.multi_calibration(self.calibration_results.keys())
         # Dict mapping SONAR timestamp to the charuco board's location in the
         # camera frame, where location is given as a (rvec, tvec) tuple.
         self.camera_poses = {}
@@ -465,7 +492,7 @@ class SensorWindow(QtWidgets.QMainWindow):
         transform_widget = QtWidgets.QWidget()
         transform_widget.setLayout(transform_col)
         camera_splitter.addWidget(transform_widget)
-
+        
         sonar_splitter = QtWidgets.QSplitter()
         sonar_splitter.setOrientation(QtCore.Qt.Orientation.Vertical)
         sonar_splitter.addWidget(polar_sonar_widget)
@@ -481,6 +508,9 @@ class SensorWindow(QtWidgets.QMainWindow):
         label_sonar_widget.setLayout(raw_sonar_col)
         main_splitter.addWidget(label_sonar_widget)
         main_splitter.addWidget(sonar_splitter)
+        main_splitter.setStretchFactor(0, 1)
+        main_splitter.setStretchFactor(1, 2)
+        main_splitter.setStretchFactor(2, 2)
 
         self.layout.addLayout(self.header_row)
         self.layout.addWidget(main_splitter, stretch=1)
@@ -677,7 +707,6 @@ class SensorWindow(QtWidgets.QMainWindow):
                 
                 # don't plot points outside the FOV
                 nrows, ncols = camera_data.shape
-                #print(nrows, ncols, xx, yy)
                 if xx >= 0 and xx < ncols and yy >= 0 and yy < nrows:
                     y = nrows - yy
                     self.camera_annotated_camera_ax.plot(int(xx), int(yy), "r.")
@@ -746,13 +775,6 @@ class SensorWindow(QtWidgets.QMainWindow):
 
         self.sonar_annotated_camera_ax.cla()
 
-        # #temporary!! just a test
-        # #this is wrong. ext vectors are between sonar and camera
-        # rvec = np.reshape(self.ext_rvec, (3, 1))
-        # tvec = np.reshape(self.ext_tvec, (3, 1))
-
-        # extent_radians = [min_th, max_th, min_range, max_range]
-
         self.sonar_annotated_camera_ax.imshow(data, cmap="inferno", 
             aspect="auto",
             interpolation="none",
@@ -763,7 +785,6 @@ class SensorWindow(QtWidgets.QMainWindow):
             np.array([[coord[0], coord[1], 0, label] for label, coord in self.sonar_coords.items()]))
         
         target_points = target_data[0:3, :].astype(np.float32)
-        target_labels = target_data[3, :]
         
         # target_points = np.transpose(
         #     np.array([[coord[0], coord[1], 0] for coord in self.sonar_coords.values()])
@@ -771,7 +792,6 @@ class SensorWindow(QtWidgets.QMainWindow):
         # print(target_p, "labels", target_points)
         # print("rvec and tvec", rvec, tvec)
         if rvec is not None:
-            print("Using calibration data from this frame") #TODO do I really need this?
             rot, _ = cv2.Rodrigues(rvec)
             label_text = (
                 "Sonar -> Target: \n"
@@ -794,16 +814,11 @@ class SensorWindow(QtWidgets.QMainWindow):
             sonar_coords = isc.polar_from_3d(sonar_points)
             plottable = isc.polar_to_pixel(sonar_coords, self.sonar_params)
             self.sonar_annotated_camera_ax.plot(
-                plottable[0, :], plottable[1, :], "rx", fillstyle="none"
+                plottable[0, :], plottable[1, :], "rx", fillstyle="none", label="current frame calibration"
             )
             # self.sonar_annotated_camera_ax.text(
             #     plottable[0, :], plottable[1, :], target_labels[:], color="r")
         if agg_rvec is not None:
-            print("Using aggregate calibration data")
-            # TODO: Actually *always* show the aggregate calibration?
-            #   (This requires actually calculating one from more than one frame...)
-            # Use calibration value from another frame ... just to show that it generalizes.
-
             # cam_rot, _ = cv2.Rodrigues(cam_rvec)
             # init_rvec = np.reshape([1.33891995, 1.32590053, 1.1214456], (3, 1)) #TODO <-
             # init_rot, _ = cv2.Rodrigues(init_rvec)
@@ -816,13 +831,14 @@ class SensorWindow(QtWidgets.QMainWindow):
             sonar_coords = isc.polar_from_3d(sonar_points)
             plottable = isc.polar_to_pixel(sonar_coords, self.sonar_params)
             self.sonar_annotated_camera_ax.plot(
-                plottable[0, :], plottable[1, :], "yx", fillstyle="none"
+                plottable[0, :], plottable[1, :], "yx", fillstyle="none", label="aggregate calibration"
             )
             # init_sonar_coords = isc.polar_from_3d(init_sonar_points)
             # self.sonar_annotated_camera_ax.plot(
             #     init_sonar_coords[0, :], init_sonar_coords[1, :], "rx", fillstyle="none"
             #     #add text?
             # )
+            self.sonar_annotated_camera_ax.legend(loc="lower right")
 
         # This is an ugly set of magic numbers...
         # In order to plot the "as-initialized", use the camera pose + initial
@@ -921,7 +937,6 @@ class SensorWindow(QtWidgets.QMainWindow):
             return
 
     def handle_next_good_button(self):
-        #good_timestamps is a set
         ts_array = np.array(list(self.good_timestamps))
         (future_idxs,) = np.where(ts_array > self.current_timestamp)
         if future_idxs.size == 0:
@@ -965,8 +980,6 @@ class SensorWindow(QtWidgets.QMainWindow):
                 del self.sonar_labels[self.current_timestamp]
             else:
                 label = text.strip().upper()
-                # Technically, pop doesn't require checking if the dict contains
-                # the key, but we only want to redraw if necessary.
                 if label in self.sonar_labels[self.current_timestamp]:
                     self.sonar_labels[self.current_timestamp].pop(label, None)
                     if len(self.sonar_labels[self.current_timestamp]) == 0:
@@ -1041,12 +1054,6 @@ class SensorWindow(QtWidgets.QMainWindow):
         have_labels = self.current_timestamp in self.sonar_labels
         if not have_labels or camera_rvec is None:
             return None, None, None, None, None, None, None, None
-
-        # I don't want to recalculate calibration if the calibration has already been found for this 
-        # pair with the same labeled points. I don't know how to check if the labeled points are the same
-        # if self.current_timestamp in self.calibration_results:
-        #     prev_calibration, sonar_points, camera_points = self.calibration_results[self.current_timestamp]
-        #     cs_err, cs_rvec, cs_tvec = prev_calibration
         
         labeled_points = self.sonar_labels[self.current_timestamp]
         sonar_points, target_points = isc.get_sonar_target_correspondences(labeled_points, self.sonar_params)
@@ -1066,7 +1073,6 @@ class SensorWindow(QtWidgets.QMainWindow):
             self.ext_rvec,
             self.ext_tvec,
         )
-        
 
         cs_rot, _ = cv2.Rodrigues(cs_rvec)
         #yaw, pitch, roll = tf.transformations.euler_from_matrix(np.transpose(cs_rot))
@@ -1137,6 +1143,7 @@ class SensorWindow(QtWidgets.QMainWindow):
         #TODO: what is camera_poses really being used for?
         if camera_rvec is not None:
             self.camera_poses[self.current_timestamp] = (camera_rvec, camera_tvec)
+            print("camera poses", self.camera_poses)
         else:
             print("No charuco detections. Automatically skipping")
             self.handle_skip_button()
@@ -1147,7 +1154,7 @@ class SensorWindow(QtWidgets.QMainWindow):
         self.plot_raw_camera_data(self.camera_data)
         self.plot_charuco_detections(camera_gray, charucoCorners, charucoIds)
         self.plot_camera_targets_from_camera(camera_gray, camera_rvec, camera_tvec)
-        
+
         sonar_matrix = cv2.remap(self.sonar_image, *self.polar_transform, cv2.INTER_LINEAR)
         sonar_matrix = cv2.flip(sonar_matrix, 0)
         
@@ -1250,5 +1257,4 @@ if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
     window = SensorWindow(rootdir)
     window.showMaximized()         
-    window.show()
     sys.exit(app.exec_())

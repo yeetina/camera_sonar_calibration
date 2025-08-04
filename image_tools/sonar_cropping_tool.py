@@ -64,7 +64,6 @@ class EnterPointDialog(QtWidgets.QDialog):
 
     def handle_ok(self):
         option = self.select_postion.currentText()
-        print("option", option)
         self.point_cb(option)
         self.done(0)
 
@@ -94,9 +93,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.plot_sonar_im(False)
 
     def setup_layout(self):
-        self.layout = QtWidgets.QVBoxLayout(self._main)
+        self.layout = QtWidgets.QHBoxLayout(self._main)
 
-        self.sonar_image_fig = matplotlib.figure.Figure(figsize=(5, 3))
+        self.sonar_image_fig = matplotlib.figure.Figure()
         self.sonar_image_ax = self.sonar_image_fig.add_axes([0.0, 0.0, 1.0, 1.0])
         self.sonar_image_artist = None
         self.sonar_image_canvas = FigureCanvas(self.sonar_image_fig)
@@ -135,26 +134,33 @@ class MainWindow(QtWidgets.QMainWindow):
         image_grid.addWidget(diagram,1,1)
         instructions_layout.addLayout(image_grid)
         instructions_text = QtWidgets.QLabel()
-        instructions_label = (f"Click on the sonar image to add a point.\n" 
+        instructions_label = (f"Click anywhere on the sonar image to add a point.\n" 
                     "Use the dropdown menu to select a label for the point.\n"
-                    "If you want to move or replace a point, just click on a new spot and select the label again.")
+                    "If you want to move or replace a point, just click on \n"
+                    "a new spot and select the label again.")
         instructions_text.setText(instructions_label)
         instructions_layout.addWidget(instructions_text)
         instructions = QtWidgets.QWidget()
         instructions.setLayout(instructions_layout)
+        print(instructions.sizeHint())
+        print(sonar_col.sizeHint())
 
-        label_sonar_splitter = QtWidgets.QSplitter()
-        label_sonar_splitter.addWidget(instructions)
-        label_sonar_splitter.addWidget(sonar_col)
-        label_sonar_splitter.setSizes([150,750])  
-        label_sonar_splitter.setStretchFactor(0, 1)
-        label_sonar_splitter.setStretchFactor(1, 10)
+        # main_layout = QtWidgets.QHBoxLayout()
+        self.layout.addWidget(instructions, stretch=2)
+        self.layout.addWidget(sonar_col, stretch=8)
+        print("main layout created")
+        # label_sonar_splitter = QtWidgets.QSplitter()
+        # label_sonar_splitter.addWidget(instructions)
+        # label_sonar_splitter.addWidget(sonar_col)
+        # label_sonar_splitter.setSizes([150,750])  
+        # label_sonar_splitter.setStretchFactor(0, 1)
+        # label_sonar_splitter.setStretchFactor(1, 10)
 
         # # Finally, add all columns to the main window!
         # label_sonar_widget = QtWidgets.QWidget()
         # label_sonar_widget.setLayout(raw_sonar_col)
-        self.layout.addWidget(label_sonar_splitter)
-        #self.setLayout(raw_sonar_col)
+        #self.layout.addWidget(label_sonar_splitter)
+        #self.setLayout(main_layout)
 
     def handle_sonar_click(self, event):
         """
@@ -202,7 +208,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.origin_point = self.arc_points["Origin"]
             self.left_point = self.arc_points["Left"]
             self.right_point = self.arc_points["Right"]
-            print("all three")
             image = self.mask_arc(image, self.origin_point, self.left_point, self.right_point)
             
         self.sonar_image_ax.imshow(image,             
@@ -251,8 +256,11 @@ class MainWindow(QtWidgets.QMainWindow):
         return cv2.addWeighted(image, 0.25, masked, 0.75, 0)
     
 if __name__ == "__main__":
-    sonar_file = "C:/Users/corri/OneDrive/Documents/SonarExperimentData/07-23-2025/sonar/Oculus_20250723_163603.jpg"
+    rootdir = "C:/Users/corri/OneDrive/Documents/SonarExperimentData/07-23-2025"
+    rootdir += "/sonar"
+    # first sonar image in sonar folder
+    sonar_file = os.path.join(rootdir, os.listdir(rootdir)[0])
     app = QtWidgets.QApplication(sys.argv)
     window = MainWindow(sonar_file)
-    window.show()
+    window.showMaximized()  
     sys.exit(app.exec_())
