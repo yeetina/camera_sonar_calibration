@@ -1,26 +1,26 @@
 # camera_sonar_calibration
+
 ## Getting Started:
+
 ### Charuco Target
-This repository uses a charuco pattern as a calibration target. In charuco_utils.py, there is a function called generate_charuco_board_image that will allow you to save an image of the pattern. This code is designed for an 8x11 grid. If you want to use a different shape, see notes. You will need to print out the design on a waterproof material and place screws or bolts in the centers of specific squares (show diagram). The target can be scaled up or down as needed, but it is recommended to use a size of A4 or larger. In the field for square size, be sure to input the side length of the squares in meters.
+This repository uses a charuco pattern as a calibration target. The default target configuration is an 8x11 square grid using the aruco dictionary 'DICT_4X4_250'. [^1] In charuco_utils.py, there is a function called generate_charuco_board_image that will allow you to save an image of this pattern. You will need to print out the design on a waterproof material and place screws or bolts in the centers of the labeled squares.
+<img width="360" height="258" alt="image" src="https://github.com/user-attachments/assets/763bee1c-ee50-4a41-b36e-ed5d11f92d2c" />  
+The target can be scaled up or down as needed, but it is recommended to use a size of A4 or larger. At the top of charuco_utils.py, be sure to update the length variables. SQUARE_LENGTH is the side length in meters of the whole chessboard square and MARKER_LENGTH is the size of the aruco marker (typically 75% of square length).
 
 ### Camera Calibration
-You will need to have the intrinsic calibration matrices for your camera before calibrating it with the sonar. This repository provides a couple calibration scripts in camera_tools. There is one for a charuco target and one for a chessboard target. You can use any method to obtain your calibration matrices. You will need to input the matrices by saving them into a json file or pasting them as numpy arrays in initialize_camera in calibration_gui.py. 
-Detect_charuco_pos can help you check if you camera calibration is correct or at least reasonable.
+You will need to have the intrinsic calibration matrices for your camera before perfoming external calibration with the sonar. You can use any method to obtain your calibration matrices. This repository provides a couple calibration scripts in camera_tools - one for a charuco target and one for a chessboard target. In order for the gui to access the calibration matricies, you can save them as a json file and pass the filename as a parameter in initialize_camera (line 134) or paste them as numpy arrays in initialize_camera (lines 193-197). 
+Detect_charuco_pos can confirm if the charuco detection is working. It returns the translation and rotation vectors of the charuco target origin, which can be used to check if your camera calibration is correct.
 
 ### Data collection
-A tool for saving images from a camera is provided. When you run save_images.py, press "s" to save a frame and it will automatically be named with a correctly-formatted timestamp.
+A tool for saving images from a camera is provided. When you run save_images.py, press "s" to save a frame and it will automatically be named with a correctly-formatted timestamp.   
+It is difficult to collect data from the Oculus sonar software and the camera at the same time. Collecting camera data on one computer and sonar data on another was found to be a successful way to save both types of images nearly simultaneously.
 
 ### Data Input
-To use the gui, you will need to have folders of sonar and camera images set up in the right way. The file structure will look like this:
-```
-your_folder/
-    |-camera
-    |-sonar
-```
-The code is designed to accept camera images with file names in timestamp format YYYYMMDD_HHMMSS. The sonar images used a similar naming convention of Oculus_YYYYMMDD_HHMMSS, where the timestamp matches one of the images. It is not necessary to name the sonar images in a specific way; the only requirement is that when the camera file names and sonar file names are passed into python’s sorted function, they both must return in the same order.
+To use the gui, you must input the filepath to your data folder as rootdir at the end of calibration_gui. This root folder must contain folders named "sonar" and "camera" containing your images.  
+The code is designed to accept camera images with file names in timestamp format YYYYMMDD_HHMMSS. The sonar images use a similar naming convention of Oculus_YYYYMMDD_HHMMSS. There should be equal numbers of sonar and camera images and  the image pairs should have identical timestamps. It is not necessary to name the sonar images in a specific way; the only requirement is that when the camera file names and sonar file names are passed into python’s sorted function, they both must return in the same order.
 
 ### Sonar Data
-This program accepts sonar input in the format of a rectangular image showing the sonar display. To isolate the sonar data from your input images, first run the sonar cropping tool. It will allow you to indicate the shape and size of the sonar arc so that this program can extract the relevant data. Before running, make sure to imput the filaname for one of your sonar images at the bottom of this file. It is assumed that the sonar arc is in the same position in all of your sonar images. The resulting values from this tool will be automatically saved to sonar_cropping_params.json. You can also change the file name by... but if you do, make sure you also change it in inage_sonar_utils.
+This program accepts sonar input in the format of a rectangular image showing the sonar data as an arc. To isolate the sonar data from your input images, first run the sonar cropping tool. It will allow you to indicate the shape and size of the sonar arc so that this program can extract the relevant data. Before running, make sure to imput the filaname for one of your sonar images at the bottom of this file. It is assumed that the sonar arc is in the same position in all of your sonar images. The resulting values from this tool will be automatically saved to sonar_cropping_params.json. You can also change the file name by... but if you do, make sure you also change it in inage_sonar_utils.
 
 ### Sonar Parameters
 In image_sonar_utils.py, you will find the SonarInfo class. This class was written for an Oculus M3000d sonar and includes values specific to that device. Make sure to input the aperture, range resolution, and angular resolution of the sonar device used in data collection. It is also designed to accept the range that was used for data collection in meters and a boolean wide to indicate whether the sonar was used in wide angle mode or not. The Oculus sonar has different specifications if used in wide angle mode. 
@@ -67,3 +67,5 @@ Order of events when running calibration_gui
 - plot_camera_targets_from_camera
 - sonar polar transform
 - calibrate_sonar
+
+[^1]: If you want to use a different configuration, changes will need to be made to the global variables of charuco_utils.py and the function init_charuco_sonar in image_sonar_utils.py
