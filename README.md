@@ -49,24 +49,32 @@ Breif decriptions of each button:
 
 ## How to change things without breaking the code
 
-## What's happening behind the scenes
-Order of events when running calibration_gui
-1. setup_layout
-2. sonar params json
-3. create SonarInfo object
-4. create SensorData object
-5. calculate polar transform
-6. load_state
-7. call next button
-8. call update_plots
-- update pair label
-- detect_charuco_board
-- save camera pose or skip
-- plot_raw_camera_data
-- plot_charuco_detections
-- plot_camera_targets_from_camera
-- sonar polar transform
-- calibrate_sonar
+## How it Works
+### Initialization
+When calibration_gui.py is run, the following actions will happen:
+1. setup_layout() is called to create the layout of the GUI and initialize the various plots
+2. setup_data() is called, which performs several functions.
+- Accessing the sonar parameters json file or prompting the user to create it.
+- Creating a SonarInfo object
+- Calculating the sonar image transformation, which converts the sonar arc in cartesian coordinates into a rectangular representation of the polar coordinates
+- Creating a SensorData object to organize and step through the image pairs
+- Calling LoadState() to retrieve data from previous uses of the gui
+3. handle_next_button is called, which then calls update_plots() to populate all of the plots on the gui
+### Updating Plots
+Most of the functionality of this software happens within update_plots(). 
+1. Image label is updated with timestamp and "good" label
+2. detect_charuco_board() from charuco_utils is called to identify corners and find the translation and rotation vectors of the target's position relative to the camera. The image pair is automatically skipped if no board is detected.
+3. plot_raw_camera_data displays the camera image in grayscale in the figure titled "Raw Camera Image"
+4. plot_charuco_detections uses detected charuco corners to annotate the raw image in the figure titled "Detected Aruco / Charuco"
+5. plot_camera_targets_from_camera uses the target's position vectors to plot the calculated locations of the bolts to be detected by sonar. It also draws the axes of the target origin to check if the detected rotation vector is correct. This is displayed in the figure titled "Charuco-Derived Locations"
+6. The sonar image is mapped from the original format to a polar matrix
+7. calibrate_sonar is called. The goal of extrinsic calibration is to find the correct translation and rotation vectors to project points from the camera's frame into the sonar's frame. There are several steps to this process:
+- For all of the user-labeled points, the locations on the sonar image are stored as sonar_points and the positions on the target are stored as target_points (get_sonar_target_correspondences)
+- Using the known transformation from the camera to the target, the target_points are converted to 3D coordinates in the camera's frame, which are then stored as camera_points
+- The calibrate_sonar function in image_sonar_utils is called next. It uses an error function which takes in a translation and rotation vector and uses them to project camera_points into the sonar's frame. The result of the error function is the sum of difference between the projected locations and the actual user-labeled locations. Calibrate_sonar uses the Nelder-Mead minimization algorithm to find vectors that minimize this error function. To help avoid falling into a local minimum, it first minimizes the translation vector while keeping rotation constant. Then, it uses the resulting translation vector to perform a full optimization.
+
+### User interaction
+
 
 [^1]: If you want to use a different configuration, changes will need to be made to the global variables of charuco_utils.py and the function init_charuco_sonar in image_sonar_utils.py
 [^2]: See relative_pose_calculator.m for a way to calculate the external position vectors
