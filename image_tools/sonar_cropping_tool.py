@@ -69,15 +69,19 @@ class EnterPointDialog(QtWidgets.QDialog):
 
 
 class MainWindow(QtWidgets.QMainWindow):
-    def __init__(self, sonar_file, json_filename = "sonar_cropping_params.json"):
+    def __init__(self, rootdir):
         """
-        GUI for selecting the 
+        GUI for selecting the sonar arc
         """
         super(MainWindow, self).__init__()
         self._main = QtWidgets.QWidget()
         self.setCentralWidget(self._main)
+        self.rootdir = rootdir
+        sonar_folder = rootdir + "/sonar"
+        # first sonar image in sonar folder
+        sonar_file = os.path.join(sonar_folder, os.listdir(sonar_folder)[0])
         self.raw_sonar_im = cv2.imread(sonar_file, cv2.IMREAD_GRAYSCALE)
-        self.json_filename = json_filename
+
         self.arc_points = {}
         self.im_height, self.im_width = self.raw_sonar_im.shape
         self.cropping_params = {"crop_left": 0, 
@@ -142,25 +146,10 @@ class MainWindow(QtWidgets.QMainWindow):
         instructions_layout.addWidget(instructions_text)
         instructions = QtWidgets.QWidget()
         instructions.setLayout(instructions_layout)
-        print(instructions.sizeHint())
-        print(sonar_col.sizeHint())
 
         # main_layout = QtWidgets.QHBoxLayout()
         self.layout.addWidget(instructions, stretch=2)
         self.layout.addWidget(sonar_col, stretch=8)
-        print("main layout created")
-        # label_sonar_splitter = QtWidgets.QSplitter()
-        # label_sonar_splitter.addWidget(instructions)
-        # label_sonar_splitter.addWidget(sonar_col)
-        # label_sonar_splitter.setSizes([150,750])  
-        # label_sonar_splitter.setStretchFactor(0, 1)
-        # label_sonar_splitter.setStretchFactor(1, 10)
-
-        # # Finally, add all columns to the main window!
-        # label_sonar_widget = QtWidgets.QWidget()
-        # label_sonar_widget.setLayout(raw_sonar_col)
-        #self.layout.addWidget(label_sonar_splitter)
-        #self.setLayout(main_layout)
 
     def handle_sonar_click(self, event):
         """
@@ -183,9 +172,10 @@ class MainWindow(QtWidgets.QMainWindow):
         dialog.exec_()
 
     def handle_save_button(self):
-        with open(self.json_filename, 'w') as json_file:
+        json_filename = self.rootdir + "/sonar_cropping_params.json"
+        with open(json_filename, 'w') as json_file:
             json.dump(self.cropping_params, json_file, indent=4)
-        print(f"Sonar cropping parameters have been saved to {self.json_filename}")
+        print(f"Sonar cropping parameters have been saved to {json_filename}")
         self.close()
 
     def add_point(self, event, label):
@@ -194,7 +184,7 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         self.arc_points[label] = (event.xdata, event.ydata)
         self.plot_sonar_im()
-        print(f"{label} point added", event.xdata, ", ", event.ydata)
+        print(f"{label} point added:", event.xdata, ",", event.ydata)
 
     def plot_sonar_im(self, keep_limits=True):
         xlim = self.sonar_image_ax.get_xlim()
@@ -238,13 +228,13 @@ class MainWindow(QtWidgets.QMainWindow):
         rx, ry = right[0], right[1]
         #radius is the average distance from left/right point to the origin
         radius = round(np.mean([np.sqrt((lx-ox)**2+(ly-oy)**2), np.sqrt((rx-ox)**2+(ry-oy)**2),]))
-        self.cropping_params["center"] = centerpoint
         self.cropping_params["radius"] = radius
         self.cropping_params["crop_left"] = round(lx)
         self.cropping_params["crop_right"] = round(rx)
         self.cropping_params["crop_top"] = round(oy - radius)
         self.cropping_params["crop_bottom"] = round(oy)
-        centerpoint = (round(ox-lx), radius)
+        centerpoint = (round(ox), round(oy))  #(round(ox-lx), radius)
+        self.cropping_params["center"] = centerpoint
         angle_start = np.rad2deg(np.atan((ox-lx)/(ly-oy)))
         angle_end = np.rad2deg(np.atan((ox-rx)/(ry-oy)))
         self.cropping_params["angle_start"] = angle_start
@@ -252,15 +242,14 @@ class MainWindow(QtWidgets.QMainWindow):
         
         mask = np.zeros(image.shape[:2], dtype="uint8")
         cv2.ellipse(mask, centerpoint, (radius, radius), 0.0, angle_start+270, angle_end+270, (255), -1)
-        masked = cv2.bitwise_and(image, image, mask=mask)
-        return cv2.addWeighted(image, 0.25, masked, 0.75, 0)
+        #whitemask = cv2.bitwise_not(mask, mask, mask=mask)
+        whitemask = 255 - mask
+        #masked = cv2.bitwise_and(image, image, mask=mask)
+        return cv2.addWeighted(image, 0.5, whitemask, 0.5, 0)
     
 if __name__ == "__main__":
-    rootdir = "C:/Users/corri/OneDrive/Documents/SonarExperimentData/07-23-2025"
-    rootdir += "/sonar"
-    # first sonar image in sonar folder
-    sonar_file = os.path.join(rootdir, os.listdir(rootdir)[0])
+    rootdir = "C:/Users/corri/OneDrive/Documents/SonarExperimentData/07-23-2025copy"
     app = QtWidgets.QApplication(sys.argv)
-    window = MainWindow(sonar_file)
+    window = MainWindow(rootdir)
     window.showMaximized()  
     sys.exit(app.exec_())

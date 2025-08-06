@@ -145,21 +145,19 @@ class SensorWindow(QtWidgets.QMainWindow):
         super(SensorWindow, self).__init__()
         self.rootdir = rootdir
         self.outdir = f"{rootdir}/output"
-        json_file_path = f'{rootdir}/inputparams.json'
 
         try:
             if not os.path.exists(self.outdir):
                 os.makedirs(self.outdir)
         except Exception as ex:
             print("Could not create directory: {}".format(self.outdir))
-            print("")
             raise (ex)
 
         self._main = QtWidgets.QWidget()
         self.setCentralWidget(self._main)
         self.setup_layout()
         print("GUI setup complete")
-        self.setup_data(json_file_path)
+        self.setup_data()
         self.initialize_camera()
 
         (self.aruco_dict, self.charuco_board, self.sonar_coords) = isc.init_charuco_sonar() 
@@ -169,12 +167,13 @@ class SensorWindow(QtWidgets.QMainWindow):
         # Only called once; the rest of the draw* are called on every refresh
         self.plot_charuco_target(self.charuco_board, self.sonar_coords)
 
-    def setup_data(self, json_file):
+    def setup_data(self):
+        json_file_path = f'{self.rootdir}/inputparams.json'
         try:
-            with open(json_file, 'r') as file: # Read the JSON file
+            with open(json_file_path, 'r') as file: # Read the JSON file
                 json_data = json.load(file)
         except Exception as ex:
-            print("Could not open json file: {}".format(json_file))
+            print("Could not open json file: {}".format(json_file_path))
             print("Creating new json file now")
             sonar_in = float(input("Range (as a float): "))
             wide_in = input("Using wide field of view? (True/False) ")
@@ -185,21 +184,22 @@ class SensorWindow(QtWidgets.QMainWindow):
             r_data = [float(num) for num in list(r_in.split(", "))] 
             json_data = {"sonar_range": sonar_in, "sonar_wide": wide_bool, 
                     "ext_t": t_data, "ext_r": r_data}
-            with open(json_file, 'w') as json_file:
-                json.dump(json_data, json_file, indent=4)
+            with open(json_file_path, 'w') as file:
+                json.dump(json_data, file, indent=4)
 
         sonar_range = json_data["sonar_range"]
         sonar_wide = json_data["sonar_wide"]
         self.ext_rvec = tuple(json_data["ext_r"])
         self.ext_tvec = tuple(json_data["ext_t"])
 
-        self.sonar_params = isc.SonarInfo(sonar_range, sonar_wide)
-        self.paired_data = isc.SensorData(self.rootdir, self.sonar_params)
+        sonar_cropping_params = self.rootdir + "/sonar_cropping_params.json"
+        self.sonar_params = isc.SonarInfo(sonar_range, sonar_wide, sonar_cropping_params)
         self.range_m = sonar_range
         self.polar_transform = isc.create_transform_map(self.sonar_params)
         print("Sonar parameters loaded successfully")
 
-        (self.good_timestamps, self.skip_timestamps, self.sonar_labels, self.calibration_results) = self.load_state()
+        self.paired_data = isc.SensorData(self.rootdir, self.sonar_params)
+        (self.good_timestamps, self.skip_timestamps, self.sonar_labels, self.calibration_results, self.camera_poses) = self.load_state()
         # good_timestamps and skip_timestamps are sets of timestamps
         # sonar_labels is a dictionary mapping labels to user-selected sonar points
         # calibration_results is a dict mapping timestamps to calibration results and the
@@ -207,8 +207,7 @@ class SensorWindow(QtWidgets.QMainWindow):
 
         # Dict mapping SONAR timestamp to the charuco board's location in the
         # camera frame, where location is given as a (rvec, tvec) tuple.
-        self.camera_poses = {}
-        
+        #self.camera_poses = {}
         
     def initialize_camera(self, json_file_path = None):
         if json_file_path is not None:
@@ -282,7 +281,7 @@ class SensorWindow(QtWidgets.QMainWindow):
             "Detected aruco markers (green squares) and " "charuco corners (red dots)"
         )
         charuco_annotated_widget = AnnotatedCanvas(
-            "Detected aruco / charuco",
+            "Detected Aruco / Charuco",
             charuco_annotated_help,
             self.charuco_annotated_camera_canvas,
         )
@@ -299,7 +298,7 @@ class SensorWindow(QtWidgets.QMainWindow):
             "targets based on the detected charuco board"
         )
         camera_camera_widget = AnnotatedCanvas(
-            "Charuco-derived locations",
+            "Charuco-Derived Locations",
             camera_camera_help,
             self.camera_annotated_camera_canvas,
         )
@@ -326,7 +325,7 @@ class SensorWindow(QtWidgets.QMainWindow):
             "the image using the CameraInfo."
         )
         camera_sonar_widget = AnnotatedCanvas(
-            "Sonar-derived locations",
+            "Sonar-Derived Locations",
             camera_sonar_help,
             self.camera_annotated_sonar_canvas,
         )
@@ -339,18 +338,18 @@ class SensorWindow(QtWidgets.QMainWindow):
         self.polar_sonar_ax = self.polar_sonar_fig.add_axes(
             [0.05, 0.05, 0.9, 0.9]) #polar=True
         self.polar_sonar_canvas = FigureCanvas(self.polar_sonar_fig)
-        polar_sonar_help = "Polar plot of sonar image"
+        polar_sonar_help = "Rectangular image of sonar arc after removing background"
         polar_sonar_widget = AnnotatedCanvas(
-            "Polar Sonar Image", polar_sonar_help, self.polar_sonar_canvas
+            "Raw Sonar Image", polar_sonar_help, self.polar_sonar_canvas
         )
 
         # Figure showing expected locations of the sonar targets on the
         # sonar image, using the charuco-derived board position
         self.sonar_annotated_camera_fig = matplotlib.figure.Figure(figsize=(5, 3))
         self.sonar_annotated_camera_ax = self.sonar_annotated_camera_fig.add_axes(
-            [0, 0, 1, 1]
+            [0.05, 0.05, 0.9, 0.9]
         )
-        self.sonar_annotated_camera_ax.axis("off")
+        #self.sonar_annotated_camera_ax.axis("off")
         self.sonar_annotated_camera_canvas = FigureCanvas(
             self.sonar_annotated_camera_fig
         )
@@ -361,7 +360,7 @@ class SensorWindow(QtWidgets.QMainWindow):
             "Red Xs use the currently-computed calibration."
         )
         sonar_camera_widget = AnnotatedCanvas(
-            "Camera-derived locations",
+            "Camera-Derived Locations",
             sonar_camera_help,
             self.sonar_annotated_camera_canvas,
         )
@@ -463,7 +462,7 @@ class SensorWindow(QtWidgets.QMainWindow):
 
         raw_sonar_col = QtWidgets.QVBoxLayout()
         raw_sonar_col_header = QtWidgets.QHBoxLayout()
-        raw_sonar_col_label = QtWidgets.QLabel("Raw Sonar Image")
+        raw_sonar_col_label = QtWidgets.QLabel("Polar Sonar Image")
         self.raw_sonar_col_toolbar = NavigationToolbar(self.sonar_image_canvas, self)
         raw_sonar_col_header.addWidget(raw_sonar_col_label)
         raw_sonar_col_header.addWidget(self.raw_sonar_col_toolbar)
@@ -508,9 +507,9 @@ class SensorWindow(QtWidgets.QMainWindow):
         label_sonar_widget.setLayout(raw_sonar_col)
         main_splitter.addWidget(label_sonar_widget)
         main_splitter.addWidget(sonar_splitter)
-        main_splitter.setStretchFactor(0, 1)
-        main_splitter.setStretchFactor(1, 2)
-        main_splitter.setStretchFactor(2, 2)
+        main_splitter.setStretchFactor(0, 2)
+        main_splitter.setStretchFactor(1, 3)
+        main_splitter.setStretchFactor(2, 3)
 
         self.layout.addLayout(self.header_row)
         self.layout.addWidget(main_splitter, stretch=1)
@@ -767,7 +766,6 @@ class SensorWindow(QtWidgets.QMainWindow):
     def plot_sonar_targets_from_camera(self, data, rvec, tvec, agg_rvec, agg_tvec, cam_rvec, cam_tvec, err, agg_err):
         """
         Plot name: Camera-derived locations
-        TODO: add aggregate vectors
 
         rvec, tvec are between sonar and target
         cam_rvec, cam_tvec are from camera to target
@@ -819,13 +817,6 @@ class SensorWindow(QtWidgets.QMainWindow):
             # self.sonar_annotated_camera_ax.text(
             #     plottable[0, :], plottable[1, :], target_labels[:], color="r")
         if agg_rvec is not None:
-            # cam_rot, _ = cv2.Rodrigues(cam_rvec)
-            # init_rvec = np.reshape([1.33891995, 1.32590053, 1.1214456], (3, 1)) #TODO <-
-            # init_rot, _ = cv2.Rodrigues(init_rvec)
-            # init_tvec = np.reshape([0.006632, -0.055447, 0.075904], (3, 1))  #TODO <-
-            # init_sonar_points = init_tvec + init_rot @ (
-            #     cam_tvec + cam_rot @ target_points
-            # )
             agg_rot, _ = cv2.Rodrigues(agg_rvec) 
             sonar_points = agg_tvec + agg_rot @ target_points
             sonar_coords = isc.polar_from_3d(sonar_points)
@@ -833,41 +824,8 @@ class SensorWindow(QtWidgets.QMainWindow):
             self.sonar_annotated_camera_ax.plot(
                 plottable[0, :], plottable[1, :], "yx", fillstyle="none", label="aggregate calibration"
             )
-            # init_sonar_coords = isc.polar_from_3d(init_sonar_points)
-            # self.sonar_annotated_camera_ax.plot(
-            #     init_sonar_coords[0, :], init_sonar_coords[1, :], "rx", fillstyle="none"
-            #     #add text?
-            # )
+            
             self.sonar_annotated_camera_ax.legend(loc="lower right")
-
-        # This is an ugly set of magic numbers...
-        # In order to plot the "as-initialized", use the camera pose + initial
-        # camera->sonar transformation.
-        if cam_rvec is not None:
-            cam_rot, _ = cv2.Rodrigues(cam_rvec)
-            init_rvec = np.reshape(self.ext_rvec, (3, 1))
-            init_rot, _ = cv2.Rodrigues(init_rvec)
-
-            # Plot prior that camera and sonar are aligned
-            # init_tvec = np.reshape([0, 0, 0], (3,1))
-            # init_sonar_points = init_tvec + init_rot @ (cam_tvec + cam_rot @ target_points)
-            # init_sonar_coords = isc.image_from_sonar3d(init_sonar_points)
-            # self.sonar_annotated_camera_ax.plot(init_sonar_coords[0,:],
-            #                                    init_sonar_coords[1,:],
-            #                                    'go', fillstyle='none')
-
-            init_tvec = np.reshape(self.ext_tvec, (3, 1))
-            init_sonar_points = init_tvec + init_rot @ (
-                cam_tvec + cam_rot @ target_points
-            )
-            init_sonar_coords = isc.polar_from_3d(init_sonar_points)
-            init_sonar_coords = isc.polar_to_pixel(init_sonar_coords, self.sonar_params)
-            # self.sonar_annotated_camera_ax.plot(
-            #     init_sonar_coords[0, :], init_sonar_coords[1, :], "yo", fillstyle="none"
-            # )
-
-            # self.sonar_annotated_camera_ax.set_xlim(extent_radians[0:2])
-            # self.sonar_annotated_camera_ax.set_ylim(extent_radians[2:4])
 
         self.sonar_err_label.setText("Reprojection error: {:.2f}\nTotal reprojection error: {:.2f}".format(err, agg_err))
         self.sonar_annotated_camera_canvas.draw()
@@ -877,7 +835,6 @@ class SensorWindow(QtWidgets.QMainWindow):
             self.current_timestamp, self.sonar_image, self.camera_data = self.paired_data.next(reverse=reverse)
             if self.current_timestamp in self.skip_timestamps:
                 print("Skipping timestamp: {}".format(self.current_timestamp))
-                print("reverse", reverse)
                 self.handle_next_button(skip=True, reverse=reverse)
         except Exception as ex:
             # We expect to hit this at the end of the pairs
@@ -972,7 +929,6 @@ class SensorWindow(QtWidgets.QMainWindow):
 
     def handle_recalibrate_button(self):
         self.update_plots(keep_limits=False, calibrate=True)
-        # maybe print something too?
 
     def remove_point(self, text, remove_all):
         if self.current_timestamp in self.sonar_labels:
@@ -1053,7 +1009,7 @@ class SensorWindow(QtWidgets.QMainWindow):
         """
         have_labels = self.current_timestamp in self.sonar_labels
         if not have_labels or camera_rvec is None:
-            return None, None, None, None, None, None, None, None
+            return None, None, None, None, None
         
         labeled_points = self.sonar_labels[self.current_timestamp]
         sonar_points, target_points = isc.get_sonar_target_correspondences(labeled_points, self.sonar_params)
@@ -1062,9 +1018,7 @@ class SensorWindow(QtWidgets.QMainWindow):
         camera_rot, _ = cv2.Rodrigues(camera_rvec)
         camera_points = camera_tvec + camera_rot @ target_points
 
-        #print(f"calibration  {sonar_points}\n{camera_points}")
-        #print("init tvec, rvec", init_tvec, init_rvec)
-        print("init err ", isc.calc_projection_error(camera_points, sonar_points, self.ext_rvec, self.ext_tvec, self.sonar_params, True))
+        #print("init err ", isc.calc_projection_error(camera_points, sonar_points, self.ext_rvec, self.ext_tvec, self.sonar_params, True))
 
         cs_err, cs_rvec, cs_tvec = isc.calibrate_sonar(
             sonar_points,
@@ -1093,10 +1047,8 @@ class SensorWindow(QtWidgets.QMainWindow):
         vectors = (cs_err, cs_rvec, cs_tvec, sonar_rvec, sonar_tvec)
         self.calibration_results[self.current_timestamp] = (vectors, sonar_points, camera_points)
         self.save_state()
-        # print("camera to sonar", cs_tvec, "\n", cs_rot, "\n")
-        # print("sonar to target", sonar_tvec, "\n", sonar_rot, "\n")
 
-        return sonar_points, target_points, camera_points, cs_rvec, cs_tvec, sonar_rvec, sonar_tvec, cs_err
+        return cs_rvec, cs_tvec, sonar_rvec, sonar_tvec, cs_err
 
     def multi_calibration(self, timestamps):
         if not self.calibration_results:
@@ -1140,10 +1092,8 @@ class SensorWindow(QtWidgets.QMainWindow):
                         self.charuco_board, self.camera_data, self.camera_info.K, self.camera_info.D
                         )
         
-        #TODO: what is camera_poses really being used for?
         if camera_rvec is not None:
             self.camera_poses[self.current_timestamp] = (camera_rvec, camera_tvec)
-            print("camera poses", self.camera_poses)
         else:
             print("No charuco detections. Automatically skipping")
             self.handle_skip_button()
@@ -1151,7 +1101,7 @@ class SensorWindow(QtWidgets.QMainWindow):
         ######################
         # Update the figures
         camera_gray = cv2.cvtColor(self.camera_data.copy(), cv2.COLOR_RGB2GRAY)
-        self.plot_raw_camera_data(self.camera_data)
+        self.plot_raw_camera_data(camera_gray) #TODO: display color image with true colors
         self.plot_charuco_detections(camera_gray, charucoCorners, charucoIds)
         self.plot_camera_targets_from_camera(camera_gray, camera_rvec, camera_tvec)
 
@@ -1159,18 +1109,20 @@ class SensorWindow(QtWidgets.QMainWindow):
         sonar_matrix = cv2.flip(sonar_matrix, 0)
         
         cc = self.calibrate_sonar(camera_rvec, camera_tvec)
-        sonar_points, target_points, camera_points, cs_rvec, cs_tvec, sonar_rvec, sonar_tvec, cs_err = cc
+        cs_rvec, cs_tvec, sonar_rvec, sonar_tvec, cs_err = cc
         if calibrate:
             self.agg_err, self.agg_rvec, self.agg_tvec = self.multi_calibration(
                 self.calibration_results.keys()) #all timestamps
                 
         #print("overall calibration value\n", agg_cs_rvec, agg_cs_tvec)
-        
-        agg_cs_rot, _ = cv2.Rodrigues(self.agg_rvec)
-        camera_rot, _ = cv2.Rodrigues(camera_rvec)
-        agg_son_tvec = self.agg_tvec + agg_cs_rot @ camera_tvec
-        agg_son_rot = agg_cs_rot @ camera_rot
-        agg_son_rvec, _ = cv2.Rodrigues(agg_son_rot)
+        if self.agg_rvec is None:
+            agg_cs_rot, agg_son_tvec, agg_son_rot, agg_son_rvec = None, None, None, None
+        else:
+            agg_cs_rot, _ = cv2.Rodrigues(self.agg_rvec)
+            camera_rot, _ = cv2.Rodrigues(camera_rvec)
+            agg_son_tvec = self.agg_tvec + agg_cs_rot @ camera_tvec
+            agg_son_rot = agg_cs_rot @ camera_rot
+            agg_son_rvec, _ = cv2.Rodrigues(agg_son_rot)
 
         self.plot_sonar_image(sonar_matrix, keep_limits=keep_limits)
         self.plot_polar_sonar_image(sonar_matrix)
@@ -1191,34 +1143,31 @@ class SensorWindow(QtWidgets.QMainWindow):
             agg_son_rvec, agg_son_tvec, 
             camera_rvec, camera_tvec, cs_err, self.agg_err
         )
+        self.save_state()
 
     def load_state(self):
-        filename = "{}/calibration_labels.pkl".format(self.outdir)
+        labels_filename = "{}/calibration_labels.pkl".format(self.outdir)
         calibration_filename = "{}/calibration_data.pkl".format(self.outdir)
-        if os.path.exists(filename):
+        poses_filename = "{}/camera_poses.pkl".format(self.outdir)
+        if os.path.exists(labels_filename):
             try:
-                with open(filename, "rb") as fp:
-                    data = pickle.load(fp)
+                with open(labels_filename, "rb") as fp:
+                    labels = pickle.load(fp)
                 with open(calibration_filename, "rb") as fp:
                     points = pickle.load(fp)
-                # TODO: Maybe move this out of the try/except block?
-                # We aren't doing this for skip or sonar labels so idk if I need this
-                # if "good_timestamps" in data:
-                #     good = data["good_timestamps"]
-                # else:
-                #     good = set()
+                with open(poses_filename, "rb") as fp:
+                    poses = pickle.load(fp)    
                 
-                return data["good_timestamps"], data["skip_timestamps"], data["sonar_labels"], points
+                return labels["good_timestamps"], labels["skip_timestamps"], labels["sonar_labels"], points, poses
 
             except Exception as ex:
-                print("Could not load labels from: {}".format(filename))
-                print("")
+                print("Could not load labels from: {}".format(labels_filename))
                 # Intentionally not trying to recover, since we don't wan't
                 # to accidentally overwrite a file that the human has
                 # already started!
                 raise (ex)
         else:
-            return set(), set(), {}, {}
+            return set(), set(), {}, {}, {}
 
     def save_state(self):
         """
@@ -1252,7 +1201,7 @@ class SensorWindow(QtWidgets.QMainWindow):
 if __name__ == "__main__":
     description = "GUI for manually labeling imaging sonar calibration data"
     # Name of folder containing sonar and camera images. Data will be saved here
-    rootdir = "C:/Users/corri/OneDrive/Documents/SonarExperimentData/07-23-2025"
+    rootdir = "C:/Users/corri/OneDrive/Documents/SonarExperimentData/07-23-2025copy"
 
     app = QtWidgets.QApplication(sys.argv)
     window = SensorWindow(rootdir)

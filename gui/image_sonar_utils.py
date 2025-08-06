@@ -54,7 +54,7 @@ class SensorData():
 
 
 class SonarInfo():
-    def __init__(self, range_m, wide, crop_json="sonar_cropping_params.json"):
+    def __init__(self, range_m, wide, crop_json):
         self.range = range_m
         self.wide = wide
         if range_m > 1.5:
@@ -71,8 +71,12 @@ class SonarInfo():
             self.th_res = 0.4
             self.theta_bins = int(self.aper/0.1)
 
-        with open(crop_json, 'r') as file: # Read the JSON file
-            params = json.load(file)
+        try:
+            with open(crop_json, 'r') as file: # Read the JSON file
+                params = json.load(file)
+        except FileNotFoundError:
+            raise Exception("sonar_cropping_params.json could not be opened."
+                            "\nRun the sonar cropping tool to create a new json file")
         self.range_bins = params["radius"]
         self.crop_params = params
 
@@ -88,16 +92,18 @@ def crop_sonar_arc(sonar_im, sonarinfo):
     top, bottom = params["crop_top"], params["crop_bottom"]
     left, right = params["crop_left"], params["crop_right"]
     cropped = sonar_im[top:bottom, left:right]
+    center = params["center"]
+    centerpoint = (center[0]-left, center[1]-top)
     
     mask = np.zeros(cropped.shape[:2], dtype="uint8")
-    cv2.ellipse(mask, params["center"], (params["radius"], params["radius"]), 0.0, angle_start+270, angle_end+270, (255), -1)
+    cv2.ellipse(mask, centerpoint, (params["radius"], params["radius"]), 0.0, angle_start+270, angle_end+270, (255), -1)
     return cv2.bitwise_and(cropped, cropped, mask=mask)
 
 def create_transform_map(sonar):
     aper = sonar.aper
     theta_bins = sonar.theta_bins
     range_bins = sonar.range_bins
-    x_center = sonar.crop_params["center"][0]
+    x_center = sonar.crop_params["center"][0]-sonar.crop_params["crop_left"]
     
     x_map = np.zeros((range_bins, theta_bins), dtype=np.float32)
     y_map = np.zeros((range_bins, theta_bins), dtype=np.float32)
@@ -212,14 +218,12 @@ def get_sonar_target_correspondences(labeled_points, sonar):
     Inputs:
     * labeled_points: dict mapping label to (pixel_x, pixel_y) tuple
 
-    # TODO: Would be good to stop passing these around as tuples/lists/etc, and actually have a class.
     Returns:
     * sonar_points: locations of labeled points in the sonar frame
     * target_points: locations of labeled points in the target's frame.
     """
     _, _, sonar_coords = init_charuco_sonar()
 
-    # I'm sure there's a better way to do this, but I'm blanking on it
     angles = []
     ranges = []
     target_points = []
@@ -279,7 +283,7 @@ def estimate_target_pose(
 
     if verbose:
         print("Initial error: {}".format(err0))
-        # print("(Using rvec = {}, tvec = {}".format(rvec, tvec))
+        print("(Using rvec = {}, tvec = {}".format(rvec, tvec))
 
     fn = lambda x: calc_projection_error(  # noqa: E731
         camera_points, sonar_points, x[0:3], x[3:6], sonar
@@ -331,9 +335,7 @@ def calc_projection_error(camera_points, sonar_points, rvec, tvec, sonar, verbos
     sonar_frame = tvec + rot @ camera_points
     # tvec and rvec from sonar to target
 
-    #print("Targets, in sonar frame: ", target_sonar_frame)
     sonar_polar_frame = polar_from_3d(sonar_frame)
-    #print("Targets, in image coordinates: ", target_image_frame)
 
     # Calculate the reprojection error
     d_angle = (sonar_points[0, :] - sonar_polar_frame[0, :])/sonar.th_res
