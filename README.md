@@ -30,7 +30,8 @@ In image_sonar_utils.py, you will find the SonarInfo class. This class was writt
 The first time you run the gui on a new folder of data, you will be prompted to input some parameters. Input range and width as prompted. The external translation and rotation vectors will be used as initial values for the calibration and can be used to check the accuracy of the calculated calibration vectors. These vectors indicate the translation and rotation of the camera in the sonar's frame of reference. Find these values from the physical configuration of the sonar-camera setup [^2] or put all zeros if they are unknown. The input should be a list of three floats separated by a comma and space (ex: 0.1, 1.5, 0.0). 
 
 ## Gui Layout
-When you run the gui the display will look something like this if your camera and sonar data are good and everything is set up correctly. (image)
+When you run the gui the display will look something like this if your camera and sonar data are good and everything is set up correctly.  
+<img width="1920" height="1020" alt="image" src="https://github.com/user-attachments/assets/4accc6de-a68b-453c-ba76-56653bbca8a9" />  
 In the center is the display where you can select sonar points. On top, there are some tools to help you view the image better. Hover your mouse over these buttons to find out what they do. 
 The left has a charuco target diagram, four camera views each showing different information, and the calculated coordinate transformations.
 To calculate the calibration, start by selecting a point on the central window corresponding to one of the bolts. A (labeling?) window should pop up. Using the top left image as a guide, anter the label for that point. (Uppercase or lowercase doesn't matter.
@@ -71,7 +72,8 @@ Most of the functionality of this software happens within update_plots().
 7. calibrate_sonar is called. The goal of extrinsic calibration is to find the correct translation and rotation vectors to project points from the camera's frame into the sonar's frame. There are several steps to this process:
 - For all of the user-labeled points, the locations on the sonar image are stored as sonar_points and the positions on the target are stored as target_points (get_sonar_target_correspondences)
 - Using the known transformation from the camera to the target, the target_points are converted to 3D coordinates in the camera's frame, which are then stored as camera_points
-- The calibrate_sonar function in image_sonar_utils is called next. It uses an error function which takes in a translation and rotation vector and uses them to project camera_points into the sonar's frame. The result of the error function is the sum of difference between the projected locations and the actual user-labeled locations. Calibrate_sonar uses the Nelder-Mead minimization algorithm to find vectors that minimize this error function. To help avoid falling into a local minimum, it first minimizes the translation vector while keeping rotation constant. Then, it uses the resulting translation vector to perform a full optimization.
+- The calibrate_sonar function from image_sonar_utils is called next. It uses an error function which takes in a translation and rotation vector and uses them to project camera_points into the sonar's frame. The result of the error function is the sum of difference between the projected locations and the actual user-labeled locations. Calibrate_sonar uses the Nelder-Mead minimization algorithm to find vectors that minimize this error function. To help avoid falling into a local minimum, it first minimizes the translation vector while keeping rotation constant. Then, it uses the resulting translation vector to perform a full optimization.
+- calibrate_sonar also uses the camera to target and sonar to camera transformations to calculate the sonar to target vectors.
 
 ### User interaction
 
