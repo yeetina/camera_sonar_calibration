@@ -36,7 +36,7 @@ def pos_from_image(color_image, mtx, dst):
         print("entered conditional")
         retval, rvec, tvec = cv2.aruco.estimatePoseCharucoBoard(np.array(charucoCorners), np.array(charucoIds), board, np.array(mtx), np.array(dst), np.empty(1), np.empty(1))
         result = color_image.copy()
-        cv2.aruco.drawDetectedMarkers(result, marker_corners, marker_ids)
+        #cv2.aruco.drawDetectedMarkers(result, marker_corners, marker_ids)
         cv2.drawFrameAxes(result, np.array(mtx), np.array(dst), rvec, tvec, .1)
         #cv2.drawChessboardCorners(result, (BOARD_COLS, BOARD_ROWS), charucoCorners, retval)
 
@@ -44,12 +44,19 @@ def pos_from_image(color_image, mtx, dst):
     else:
         return [], [], color_image
 
-def single_image(filepath):
+def single_image(filepath, mtx, dst):
     image = cv2.imread(filepath)
     #image = cv2.resize(image, None, None, fx = .25, fy = .25)
-    tv, rv, result = pos_from_image(image)
-    cv2.imwrite("test_images/charucodetections.jpg", result)
+    tv, rv, result = pos_from_image(image, mtx, dst)
+    cv2.imwrite("frame.png", result)
     print(tv, "\n", rv)
+
+mtx = np.array([[1.02082611e+03, 0.00000000e+00, 7.69307527e+02],
+                [0.00000000e+00, 1.02245381e+03, 2.90583592e+02],
+                [0.00000000e+00, 0.00000000e+00, 1.00000000e+00]])
+dst = np.array([[-3.76227154e-01,  1.94912143e-01, 
+                             -2.04912328e-03,  7.63774994e-05, -5.57738640e-02]])
+single_image("C:/Users/corri/OneDrive/Documents/SonarExperimentData/07-23-2025/camera/20250723_163603.png", mtx, dst)
 
 def image_folder(img_dir):
     image_files = [os.path.join(img_dir, f) for f in os.listdir(img_dir) if f.endswith(".png")]

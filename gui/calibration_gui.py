@@ -43,6 +43,7 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 
 import charuco_utils
 import image_sonar_utils as isc
+import data_analysis_tools as dtools
 
 class NavigationToolbar(NavigationToolbar2QT):
     """
@@ -202,12 +203,12 @@ class SensorWindow(QtWidgets.QMainWindow):
         (self.good_timestamps, self.skip_timestamps, self.sonar_labels, self.calibration_results, self.camera_poses) = self.load_state()
         # good_timestamps and skip_timestamps are sets of timestamps
         # sonar_labels is a dictionary mapping labels to user-selected sonar points
+
         # calibration_results is a dict mapping timestamps to calibration results and the
         # sonar and camera points used to calculate the calibrataion
 
-        # Dict mapping SONAR timestamp to the charuco board's location in the
+        # camera_poses is a dict mapping timestamp to the charuco board's location in the
         # camera frame, where location is given as a (rvec, tvec) tuple.
-        #self.camera_poses = {}
         
     def initialize_camera(self, json_file_path = None):
         if json_file_path is not None:
@@ -333,14 +334,14 @@ class SensorWindow(QtWidgets.QMainWindow):
         ###################
         # Matplotlib figures for displaying the sonar views
 
-        # Polar plot of sonar data, with labels
-        self.polar_sonar_fig = matplotlib.figure.Figure(figsize=(5, 3))
-        self.polar_sonar_ax = self.polar_sonar_fig.add_axes(
-            [0.05, 0.05, 0.9, 0.9]) #polar=True
-        self.polar_sonar_canvas = FigureCanvas(self.polar_sonar_fig)
-        polar_sonar_help = "Rectangular image of sonar arc after removing background"
-        polar_sonar_widget = AnnotatedCanvas(
-            "Raw Sonar Image", polar_sonar_help, self.polar_sonar_canvas
+        # Figure showing the raw sonar image
+        self.cartesian_sonar_fig = matplotlib.figure.Figure(figsize=(5, 3))
+        self.cartesian_sonar_ax = self.cartesian_sonar_fig.add_axes(
+            [0.05, 0.05, 0.9, 0.9]) 
+        self.cartesian_sonar_canvas = FigureCanvas(self.cartesian_sonar_fig)
+        cartesian_sonar_help = "Cartesian image of sonar arc after removing background"
+        cartesian_sonar_widget = AnnotatedCanvas(
+            "Cartesian Sonar Image", cartesian_sonar_help, self.cartesian_sonar_canvas
         )
 
         # Figure showing expected locations of the sonar targets on the
@@ -349,7 +350,6 @@ class SensorWindow(QtWidgets.QMainWindow):
         self.sonar_annotated_camera_ax = self.sonar_annotated_camera_fig.add_axes(
             [0.05, 0.05, 0.9, 0.9]
         )
-        #self.sonar_annotated_camera_ax.axis("off")
         self.sonar_annotated_camera_canvas = FigureCanvas(
             self.sonar_annotated_camera_fig
         )
@@ -472,7 +472,7 @@ class SensorWindow(QtWidgets.QMainWindow):
         raw_sonar_col.addLayout(self.button_row)
 
         # Create the left-most column.
-        # Since we want a agrid of annotated camera images, need to nest splitters
+        # Since we want a grid of annotated camera images, need to nest splitters
         aruco_splitter = QtWidgets.QSplitter()
         aruco_splitter.setOrientation(QtCore.Qt.Orientation.Horizontal)
         aruco_splitter.addWidget(raw_camera_widget)
@@ -494,7 +494,7 @@ class SensorWindow(QtWidgets.QMainWindow):
         
         sonar_splitter = QtWidgets.QSplitter()
         sonar_splitter.setOrientation(QtCore.Qt.Orientation.Vertical)
-        sonar_splitter.addWidget(polar_sonar_widget)
+        sonar_splitter.addWidget(cartesian_sonar_widget)
         sonar_splitter.addWidget(sonar_camera_widget)
         self.sonar_err_label = QtWidgets.QLabel("Reprojection Error: ")
         sonar_splitter.addWidget(self.sonar_err_label)
@@ -568,9 +568,7 @@ class SensorWindow(QtWidgets.QMainWindow):
         * aruco_corners -- np.ndarray (empty for no data)
         * charuco_corners -- None or array (None for no data)
 
-        NB: It's not my fault that these have different forms for "no data" ...
-            that can be traced back to the function signatures of cv2.aruco's
-            detectMarkers vs. interpolateCornersCharuco
+        This function only accepts charuco_corners for now
         """
         self.charuco_annotated_camera_ax.cla()
         self.charuco_annotated_camera_ax.axis("off")
@@ -671,7 +669,6 @@ class SensorWindow(QtWidgets.QMainWindow):
             self.camera_annotated_camera_ax.imshow(camera_data, cmap="gray")
             
             rot, _ = cv2.Rodrigues(rvec)
-            #camera_matrix = np.reshape(camera_info.K, (3, 3))
             pose_text = (
                 "Camera -> Target: \n"
                 "rvec = [{:.2f}, {:.2f}, {:.2f}] \n"
@@ -749,19 +746,13 @@ class SensorWindow(QtWidgets.QMainWindow):
             self.sonar_image_ax.set_ylim(ylim)
         self.sonar_image_canvas.draw()
 
-    def plot_polar_sonar_image(self, data):
+    def plot_cartesian_sonar_image(self, data):
         """
-        Might improve this later, but not using it now
-
-        Plot sonar image in polar plot, including the annotated points.
-
-        Degrees/Radians is annoyingly inconsistent here.
-        Min/max are specified in degrees.
-        Actually plotting data, angles need to be in radians.
+        
         """
-        self.polar_sonar_ax.cla()
-        self.polar_sonar_ax.imshow(self.sonar_image, cmap="inferno")
-        self.polar_sonar_canvas.draw()
+        self.cartesian_sonar_ax.cla()
+        self.cartesian_sonar_ax.imshow(self.sonar_image, cmap="inferno")
+        self.cartesian_sonar_canvas.draw()
 
     def plot_sonar_targets_from_camera(self, data, rvec, tvec, agg_rvec, agg_tvec, cam_rvec, cam_tvec, err, agg_err):
         """
@@ -784,11 +775,6 @@ class SensorWindow(QtWidgets.QMainWindow):
         
         target_points = target_data[0:3, :].astype(np.float32)
         
-        # target_points = np.transpose(
-        #     np.array([[coord[0], coord[1], 0] for coord in self.sonar_coords.values()])
-        # ) #these coordinates are in target frame
-        # print(target_p, "labels", target_points)
-        # print("rvec and tvec", rvec, tvec)
         if rvec is not None:
             rot, _ = cv2.Rodrigues(rvec)
             label_text = (
@@ -827,7 +813,7 @@ class SensorWindow(QtWidgets.QMainWindow):
             
             self.sonar_annotated_camera_ax.legend(loc="lower right")
 
-        self.sonar_err_label.setText("Reprojection error: {:.2f}\nTotal reprojection error: {:.2f}".format(err, agg_err))
+        self.sonar_err_label.setText("Reprojection error: {:.2f}\nAggregate reprojection error: {:.2f}".format(err, agg_err))
         self.sonar_annotated_camera_canvas.draw()
 
     def handle_next_button(self, skip=False, reverse=False):
@@ -843,7 +829,7 @@ class SensorWindow(QtWidgets.QMainWindow):
                 print("Returning to previous timestamp")
                 self.handle_next_button(skip=True, reverse=True)
 
-        self.update_plots(keep_limits=False, calibrate=True)
+        self.update_plots(keep_limits=False, recalibrate=True)
 
     def handle_good_button(self):
         self.good_timestamps.add(self.current_timestamp)
@@ -903,7 +889,7 @@ class SensorWindow(QtWidgets.QMainWindow):
         self.current_timestamp = next_timestamp
         
         self.load_from_timestamp(next_timestamp)
-        self.update_plots(keep_limits=False, calibrate=True)
+        self.update_plots(keep_limits=False, recalibrate=True)
 
     def handle_prev_good_button(self):
         ts_array = np.array(list(self.good_timestamps))
@@ -913,7 +899,7 @@ class SensorWindow(QtWidgets.QMainWindow):
             return
         prev_timestamp = np.max(ts_array[past_idxs])
         self.load_from_timestamp(prev_timestamp)
-        self.update_plots(keep_limits=False, calibrate=True)
+        self.update_plots(keep_limits=False, recalibrate=True)
 
     def handle_skip_button(self):
         self.skip_timestamps.add(self.current_timestamp)
@@ -928,7 +914,7 @@ class SensorWindow(QtWidgets.QMainWindow):
         dialog.exec_()
 
     def handle_recalibrate_button(self):
-        self.update_plots(keep_limits=False, calibrate=True)
+        self.update_plots(keep_limits=False, recalibrate=True)
 
     def remove_point(self, text, remove_all):
         if self.current_timestamp in self.sonar_labels:
@@ -942,7 +928,7 @@ class SensorWindow(QtWidgets.QMainWindow):
                         del self.sonar_labels[self.current_timestamp]
       
             self.save_state()
-            self.update_plots(calibrate=True) 
+            self.update_plots(recalibrate=True) 
     
     def add_point(self, event, text, remove_all):
         """
@@ -992,7 +978,6 @@ class SensorWindow(QtWidgets.QMainWindow):
         self.good_label.setPalette(palette)
 
     def calibrate_sonar(self, camera_rvec, camera_tvec):
-        # type: None
         """
         I've found that its more stable to direcly solve for the camera->sonar
         transformation than to try to solve for the sonar->board transform
@@ -1017,7 +1002,7 @@ class SensorWindow(QtWidgets.QMainWindow):
         # Transform from target's coordinate frame to camera coordinate frame
         camera_rot, _ = cv2.Rodrigues(camera_rvec)
         camera_points = camera_tvec + camera_rot @ target_points
-
+        
         #print("init err ", isc.calc_projection_error(camera_points, sonar_points, self.ext_rvec, self.ext_tvec, self.sonar_params, True))
 
         cs_err, cs_rvec, cs_tvec = isc.calibrate_sonar(
@@ -1029,8 +1014,6 @@ class SensorWindow(QtWidgets.QMainWindow):
         )
 
         cs_rot, _ = cv2.Rodrigues(cs_rvec)
-        #yaw, pitch, roll = tf.transformations.euler_from_matrix(np.transpose(cs_rot))
-        #tf.geometry.transformation.euler.from_rotation_matrix(np.transpose(cs_rot))
         dx, dy, dz = cs_tvec[0][0], cs_tvec[1][0], cs_tvec[2][0]
         yaw, pitch, roll = cs_rvec[0][0], cs_rvec[1][0], cs_rvec[2][0]
         
@@ -1050,15 +1033,19 @@ class SensorWindow(QtWidgets.QMainWindow):
 
         return cs_rvec, cs_tvec, sonar_rvec, sonar_tvec, cs_err
 
-    def multi_calibration(self, timestamps):
+    def multi_calibration(self, timestamps, current_time = None):
         if not self.calibration_results:
             return -1, None, None
         
         all_sonar_points = []
         all_camera_points = []
+        current_son_pts, current_cam_pts = None, None
         for timestamp in timestamps:
             try:
                 results, sonar_pts, camera_pts = self.calibration_results[timestamp]
+                if timestamp == current_time:
+                    current_son_pts = sonar_pts
+                    current_cam_pts = camera_pts
                 # sonar_pts is 2xN numpy array
                 # camera_pts is a 3xN numpy array
                 all_sonar_points.append(sonar_pts)
@@ -1076,15 +1063,16 @@ class SensorWindow(QtWidgets.QMainWindow):
             self.ext_rvec,
             self.ext_tvec,
         )
-        # agg_cs_rot, _ = cv2.Rodrigues(agg_cs_rvec)
-        # camera_rot, _ = cv2.Rodrigues(camera_rvec)
-        # sonar_tvec = agg_cs_tvec + agg_cs_rot @ camera_tvec
-        # sonar_rot = agg_cs_rot @ camera_rot
-        # sonar_rvec, _ = cv2.Rodrigues(sonar_rot)
 
-        return agg_cs_err, agg_cs_rvec, agg_cs_tvec
+        if current_cam_pts is not None and current_son_pts is not None:
+            current_err = isc.calc_projection_error(current_cam_pts, current_son_pts, agg_cs_rvec, agg_cs_tvec, self.sonar_params)
+            current_err/=(current_son_pts.shape[1])
+            return current_err, agg_cs_rvec, agg_cs_tvec
+        else:
+            return agg_cs_err, agg_cs_rvec, agg_cs_tvec
+
     
-    def update_plots(self, keep_limits=True, calibrate=False):
+    def update_plots(self, keep_limits=True, recalibrate=False):
         self.timestamp_label.setText(f"Sonar timestamp: {self.current_timestamp}")
         self.update_good_label()
 
@@ -1110,11 +1098,24 @@ class SensorWindow(QtWidgets.QMainWindow):
         
         cc = self.calibrate_sonar(camera_rvec, camera_tvec)
         cs_rvec, cs_tvec, sonar_rvec, sonar_tvec, cs_err = cc
-        if calibrate:
+        if recalibrate:
             self.agg_err, self.agg_rvec, self.agg_tvec = self.multi_calibration(
-                self.calibration_results.keys()) #all timestamps
+                self.calibration_results.keys(), current_time=self.current_timestamp) #all timestamps
                 
-        #print("overall calibration value\n", agg_cs_rvec, agg_cs_tvec)
+        # Code for saving data to plot number of images vs calibration accuracy:
+        # combos = dtools.generate_calibration_groups(list(self.calibration_results.keys()))
+        # my_data = []
+        # for group in combos:
+        #     err, r, t = self.multi_calibration(group)
+        #     rlin = [r[0][0], r[1][0], r[2][0]]
+        #     tlin = [t[0][0], t[1][0], t[2][0]]
+        #     my_data.append([len(group), err, *rlin, *tlin])
+        # #print(my_data)
+        # my_data = np.array(my_data)
+        # np.savetxt("data5.csv", my_data, 
+        #         delimiter = ",")    
+        # print("data5 saved")
+        
         if self.agg_rvec is None:
             agg_cs_rot, agg_son_tvec, agg_son_rot, agg_son_rvec = None, None, None, None
         else:
@@ -1123,9 +1124,10 @@ class SensorWindow(QtWidgets.QMainWindow):
             agg_son_tvec = self.agg_tvec + agg_cs_rot @ camera_tvec
             agg_son_rot = agg_cs_rot @ camera_rot
             agg_son_rvec, _ = cv2.Rodrigues(agg_son_rot)
+        print("overall calibration value\nRvec: ", self.agg_rvec, "Tvec: \n", self.agg_tvec)
 
         self.plot_sonar_image(sonar_matrix, keep_limits=keep_limits)
-        self.plot_polar_sonar_image(sonar_matrix)
+        self.plot_cartesian_sonar_image(sonar_matrix)
 
         if sonar_rvec is None:
             cs_err = -1.0
@@ -1201,7 +1203,7 @@ class SensorWindow(QtWidgets.QMainWindow):
 if __name__ == "__main__":
     description = "GUI for manually labeling imaging sonar calibration data"
     # Name of folder containing sonar and camera images. Data will be saved here
-    rootdir = "C:/Users/corri/OneDrive/Documents/SonarExperimentData/07-23-2025copy"
+    rootdir = "C:/Users/corri/OneDrive/Documents/SonarExperimentData/07-23-2025"
 
     app = QtWidgets.QApplication(sys.argv)
     window = SensorWindow(rootdir)

@@ -111,8 +111,6 @@ def create_transform_map(sonar):
     #x is theta_bin, y is range_bin
     for y in range(range_bins):
         for x in range(theta_bins):
-            # theta_rad = (x*th_res - aper/2) * np.pi/180
-            # r_pix = (range_bins-y-1) * r_res * 892/range_m
             theta_rad = (x*0.1 - aper/2) * np.pi/180
             r_pix = range_bins-y-1
             dx = r_pix*np.sin(theta_rad)
@@ -131,7 +129,7 @@ def pixel_to_polar(coord, sonar):
     """
     xpix, ypix = coord
     theta_deg = (xpix*0.1 - sonar.aper/2)
-    r_meters = ypix * sonar.range / 892
+    r_meters = ypix * sonar.range / sonar.range_bins
     return theta_deg, r_meters
 
 def polar_to_pixel(coords, sonar):
@@ -140,7 +138,7 @@ def polar_to_pixel(coords, sonar):
     """
     r = coords[1,:]
     th = coords[0,:]
-    ypix = r * 892/sonar.range
+    ypix = r * sonar.range_bins/sonar.range
     th += .5*sonar.aper
     xpix = th/0.1
     return np.array([xpix, ypix])
@@ -355,7 +353,6 @@ def calibrate_sonar(
     init_tvec=None,
     verbose=False,
 ):
-    # 
     # Initialize the sonar to be aligned with camera axis.
     # There's a rotation here because the camera has
     # X-right, but sonar is X-fwd. rvec is the Rodrigues representation

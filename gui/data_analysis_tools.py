@@ -25,22 +25,24 @@ def save_csv_data(timestamp_groups):
         my_data.append([len(group), err, *rlin, *tlin])
     #print(my_data)
     my_data = np.array(my_data)
-    np.savetxt("data4.csv", my_data, 
+    np.savetxt("data5.csv", my_data, 
             delimiter = ",")    
         
-poses_file = "C:/Users/corri/OneDrive/Documents/SonarExperimentData/07-23-2025/output/camera_poses.pkl"
-with open(poses_file, "rb") as fp:
-    poses = pickle.load(fp)
-    flattened = []
-    for vec in poses.values():
-        rvec, tvec = vec[0], vec[1]
-        rvec = np.reshape(rvec, (1, 3))
-        tvec = np.reshape(tvec, (1, 3))
-        line = np.concat([rvec, tvec], axis=1)
-        flattened.append(line)
-    print(flattened)
-    poses = np.array(flattened)
-    poses = np.vstack(poses)
-    print("poses", poses.shape, poses)
 
-np.savetxt("posesdata.csv", poses, delimiter = ",")
+        
+# poses_file = "C:/Users/corri/OneDrive/Documents/SonarExperimentData/07-21-2025/output/camera_poses.pkl"
+# with open(poses_file, "rb") as fp:
+#     poses = pickle.load(fp)
+#     flattened = []
+#     for vec in poses.values():
+#         rvec, tvec = vec[0], vec[1]
+#         rvec = np.reshape(rvec, (1, 3))
+#         tvec = np.reshape(tvec, (1, 3))
+#         line = np.concat([rvec, tvec], axis=1)
+#         flattened.append(line)
+#     print(flattened)
+#     poses = np.array(flattened)
+#     poses = np.vstack(poses)
+#     print("poses", poses.shape, poses)
+
+# np.savetxt("posesdata2.csv", poses, delimiter = ",")

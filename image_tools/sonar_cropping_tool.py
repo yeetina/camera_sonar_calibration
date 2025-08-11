@@ -176,6 +176,7 @@ class MainWindow(QtWidgets.QMainWindow):
         with open(json_filename, 'w') as json_file:
             json.dump(self.cropping_params, json_file, indent=4)
         print(f"Sonar cropping parameters have been saved to {json_filename}")
+        print(self.cropping_params)
         self.close()
 
     def add_point(self, event, label):
@@ -208,9 +209,9 @@ class MainWindow(QtWidgets.QMainWindow):
         for label, coord in self.arc_points.items():
             x, y = coord
             self.sonar_image_ax.plot(
-                x, y, scalex=False, marker=".", ms=8, c="red", fillstyle="none"
+                x, y, scalex=False, marker=".", ms=10, c="red", fillstyle="none"
             )
-            self.sonar_image_ax.text(x+1, y+2, label, c="red", fontsize=8)
+            self.sonar_image_ax.text(x+2, y+3, label, c="red", fontsize=12)
         
         if keep_limits:
             self.sonar_image_ax.set_xlim(xlim)
@@ -242,13 +243,12 @@ class MainWindow(QtWidgets.QMainWindow):
         
         mask = np.zeros(image.shape[:2], dtype="uint8")
         cv2.ellipse(mask, centerpoint, (radius, radius), 0.0, angle_start+270, angle_end+270, (255), -1)
-        #whitemask = cv2.bitwise_not(mask, mask, mask=mask)
         whitemask = 255 - mask
-        #masked = cv2.bitwise_and(image, image, mask=mask)
-        return cv2.addWeighted(image, 0.5, whitemask, 0.5, 0)
+        masked = cv2.bitwise_not(image, image, mask=whitemask)
+        return cv2.addWeighted(image, 0.5, masked, 0.5, 0)
     
 if __name__ == "__main__":
-    rootdir = "C:/Users/corri/OneDrive/Documents/SonarExperimentData/07-23-2025copy"
+    rootdir = "C:/Users/corri/OneDrive/Documents/SonarExperimentData/07-23-2025"
     app = QtWidgets.QApplication(sys.argv)
     window = MainWindow(rootdir)
     window.showMaximized()  
